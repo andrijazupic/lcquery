@@ -102,9 +102,9 @@ source's Gaia DR3 ID:
 
 ```
 lightcurves/
-├── ZTF/4668163021600295552.csv
-├── Gaia/4668163021600295552.csv
-├── ATLAS/4668163021600295552.csv
+├── ZTF/3398501003057791360.csv
+├── Gaia/3398501003057791360.csv
+├── ATLAS/3398501003057791360.csv
 ├── …
 └── query_metadata.csv          # one row per (source, survey): status, counts, settings used
 ```
