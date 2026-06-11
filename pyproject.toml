@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lcquery"
+version = "0.1.0"
+description = "Multi-survey time-domain light-curve queries on a unified BJD_TDB / AB-uJy schema"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Andrija Zupic" }]
+dependencies = [
+  "numpy>=1.26.0",   
+  "pyarrow>=14.0.0",
+  "pandas", "pyyaml", "requests",
+  "astropy", "astroquery", "pyvo",
+  "ztfquery", "lightkurve", "astro-datalab", 
+  "skypatrol @ git+https://github.com/asas-sn/skypatrol.git"
+]
+
+[project.optional-dependencies]
+blackgem = ["google-cloud-bigquery", "db-dtypes"]
+cheops   = ["pycheops", "dace-query"]
+all      = ["google-cloud-bigquery", "pycheops", "dace-query", "db-dtypes"]
+
+[tool.setuptools.packages.find]
+include = ["lcquery*"]

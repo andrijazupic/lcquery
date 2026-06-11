@@ -1,0 +1,9 @@
+lightcurves/
+config.yaml
+ogle_ocvs_master.csv
+.dacerc
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/

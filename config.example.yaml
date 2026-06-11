@@ -1,0 +1,32 @@
+# ============================ light-curve pipeline ============================
+output:
+  base_dir: lightcurves          # where CSVs + query_metadata.csv go
+  overwrite: false               # re-download even if a cached CSV exists
+  write_header_comments: true    # prepend commented provenance to each CSV
+                                 # (if true, read CSVs back with comment='#')
+
+# Applied to every survey that ACCEPTS the key; per-survey blocks override these.
+defaults:
+  clean: true
+
+credentials:
+  atlas_token: ""
+  gaia_user: ""
+  gaia_password: ""
+
+# Per-survey settings. enabled: false skips a survey. Keys a survey's fetcher
+# doesn't accept are ignored, so you can set radius/clean freely.
+surveys:
+  BlackGEM:  {enabled: true,                     clean: true}                        
+  TESS:      {enabled: true, radius_arcsec: 2.0             }
+  K2:        {enabled: true, radius_arcsec: 2.0             }
+  ZTF:       {enabled: true, radius_arcsec: 1.5             } # login via ~/.ztfquery
+  CRTS:      {enabled: true, radius_arcmin: 0.1, clean: true} # NOTE: CRTS radius is in arcMIN
+  NSC:       {enabled: true, radius_arcsec: 2.0, clean: true}
+  ATLAS:     {enabled: true,                     clean: true} # forced phot at exact position; needs token
+  SkyMapper: {enabled: true, radius_arcsec: 3.0, clean: true}
+  J-VAR:     {enabled: true, radius_arcsec: 3.0, clean: true}
+  ASAS-SN:   {enabled: true, radius_arcsec: 5.0, clean: true}
+  OGLE:      {enabled: true, radius_arcsec: 2.0, clean: true}
+  Gaia:      {enabled: true,                     clean: true} # keyed by source_id; no radius
+  CHEOPS:    {enabled: false, radius_arcsec: 15.0, clean: true} 
