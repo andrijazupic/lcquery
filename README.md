@@ -127,7 +127,7 @@ Copy `config.example.yaml` to `config.yaml` and edit it.
 Per survey you can set:
 
 - `enabled` — turn a survey on or off.
-- `radius_arcsec` (or `radius_arcmin` for CRTS) — the cone-search radius. *(BlackGEM, Gaia,
+- `radius_arcsec` — the cone-search radius. *(BlackGEM, Gaia,
   and ATLAS take no radius — see Notes.)*
 - `clean` — when true, discards low-quality points using cuts adapted from each survey's own
   documentation and literature (quality flags, blend/saturation limits, detection thresholds).

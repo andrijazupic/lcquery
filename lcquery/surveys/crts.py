@@ -73,7 +73,7 @@ def _fetch_table(ra, dec, radius_arcmin, database, timeout, retries):
     return None, reason
 
 
-def fetch_crts_lc(source_id, ra, dec, radius_arcmin=0.1,
+def fetch_crts_lc(source_id, ra, dec, radius_arcsec=6.0,
                   database="photcat", timeout=90, retries=3, clean=True):
     """
     CRTS / CSDR3 light curve for one source, via the single-position cone search.
@@ -94,7 +94,7 @@ def fetch_crts_lc(source_id, ra, dec, radius_arcmin=0.1,
         return (df, {"survey": "CRTS", "source_id": sid,
                      "observations": len(df), "status": "success"})
 
-    raw, reason = _fetch_table(ra, dec, radius_arcmin, database, timeout, retries)
+    raw, reason = _fetch_table(ra, dec, radius_arcsec / 60.0, database, timeout, retries)
     if raw is None:
         return result("no_data" if reason == "no_link" else "search_failed")
     raw = raw.rename(columns=lambda c: str(c).strip())

@@ -20,13 +20,13 @@ surveys:
   BlackGEM:  {enabled: true,                     clean: true}                        
   TESS:      {enabled: true, radius_arcsec: 2.0             }
   K2:        {enabled: true, radius_arcsec: 2.0             }
-  ZTF:       {enabled: true, radius_arcsec: 1.5             } # login via ~/.ztfquery
-  CRTS:      {enabled: true, radius_arcmin: 0.1, clean: true} # NOTE: CRTS radius is in arcMIN
+  ZTF:       {enabled: true, radius_arcsec: 1.5             }
+  CRTS:      {enabled: true, radius_arcsec: 6.0, clean: true}
   NSC:       {enabled: true, radius_arcsec: 2.0, clean: true}
   ATLAS:     {enabled: true,                     clean: true} # forced phot at exact position; needs token
   SkyMapper: {enabled: true, radius_arcsec: 3.0, clean: true}
   J-VAR:     {enabled: true, radius_arcsec: 3.0, clean: true}
   ASAS-SN:   {enabled: true, radius_arcsec: 5.0, clean: true}
   OGLE:      {enabled: true, radius_arcsec: 2.0, clean: true}
-  Gaia:      {enabled: true,                     clean: true} # keyed by source_id; no radius
+  Gaia:      {enabled: true,                     clean: true} 
   CHEOPS:    {enabled: false, radius_arcsec: 15.0, clean: true} 

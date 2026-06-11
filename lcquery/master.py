@@ -150,8 +150,8 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
             elif verbose:
                 print(f"[{survey_name}] No valid data found ({status}).")
 
-        radius = kwargs.get("radius_arcsec", kwargs.get("radius_arcmin"))
-        runit = "arcsec" if "radius_arcsec" in kwargs else ("arcmin" if "radius_arcmin" in kwargs else "")
+        radius = kwargs.get("radius_arcsec")
+        runit = "arcsec" if "radius_arcsec" in kwargs else ""
         update_master_metadata({
             "source_id": int(source_id), "ra": ra, "dec": dec, "survey": survey_name,
             "observations": n, "status": status, "clean": kwargs.get("clean"),
