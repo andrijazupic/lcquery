@@ -39,15 +39,17 @@ def fetch_ztf_lc(source_id, ra, dec, radius_arcsec=1.5, bad_catflags_mask=32768)
     if df is None or len(df) == 0 or not _REQUIRED.issubset(df.columns):
         return result("no_data")
 
-    df = df.dropna(subset=["mjd", "mag", "magerr", "filtercode"])
+    df = df.dropna(subset=["mjd", "mag", "magerr", "filtercode", "exptime"])
     df = df[df["filtercode"].isin(_ZTF_BANDS)]
+    df = df[df["magerr"] > 0]                          # hygiene: match the other surveys
     if len(df) == 0:
         return result("filtered_out")
     df = df.reset_index(drop=True)
 
-    # time: mjd (UTC, topocentric) -> BJD_TDB at the single source position
+    # time: mid-exposure MJD (start + 0.5*exptime, exptime in s), topocentric UTC -> BJD_TDB
     coord = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
-    t = Time(df["mjd"].to_numpy(float), format="mjd", scale="utc", location=PALOMAR)
+    mjd_mid = df["mjd"].to_numpy(float) + 0.5 * df["exptime"].to_numpy(float) / 86400.0
+    t = Time(mjd_mid, format="mjd", scale="utc", location=PALOMAR)
     bjd_tdb = (t.tdb + t.light_travel_time(coord, kind="barycentric")).jd
 
     # flux: AB mag -> uJy

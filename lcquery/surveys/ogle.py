@@ -18,16 +18,13 @@ LCO = EarthLocation.from_geodetic(
 
 # OGLE = standard Johnson V / Cousins I (Vega). uJy = 10**((ZP - mag)/2.5):
 #   V (Johnson, ~3636 Jy) -> 23.90 (~=AB);  I (Cousins, ~2416 Jy) -> 23.46
-_ZP = {"I": 23.46, "V": 23.90}
+_ZP = {"I": 23.4585, "V": 23.9015}
 
 # Roots of the OGLE Collection of Variable Stars - every class lives under these.
 OCVS_ROOTS = [
     "https://ftp.astrouw.edu.pl/ogle/ogle4/OCVS/",
     "https://ftp.astrouw.edu.pl/ogle/ogle3/OIII-CVS/",
 ]
-import os
-
-import os
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _MASTER_CACHE = os.path.join(_THIS_DIR, "ogle_ocvs_master.csv")

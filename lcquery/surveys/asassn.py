@@ -35,7 +35,7 @@ def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True):
              correction (identical to the other surveys' final step).
     flux   : AB micro-Jy = flux(mJy)*1e3 (ASAS-SN flux is 3631-Jy AB-scaled).
              g shares the AB g scale of your other surveys; V is Johnson V
-             (treated as AB, ~0.02-0.04 mag Vega offset, like CRTS), a distinct band.
+             (+0.060 mag offset (effective V zero point ≈ 3836 Jy; a slight Vega offset)), a distinct band.
     filter : "asassn-g" / "asassn-v".
 
     clean  : True -> good images only (quality == 'G'); False -> keep all.

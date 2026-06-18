@@ -95,12 +95,13 @@ def fetch_nsc_lc(source_id, ra, dec, radius_arcsec=2.0, mag_choice="auto", band=
     qual_cut = f"AND m.flags = 0 AND m.{emag_col} > 0" if clean else f"AND m.{emag_col} > 0"
     
     sql_meas = f"""
-        SELECT m.mjd, m.filter, m.{mag_col} AS mag, m.{emag_col} AS magerr, m.exposure
+        SELECT m.mjd, m.filter, m.{mag_col} AS mag, m.{emag_col} AS magerr, e.instrument, e.exptime
         FROM {schema}.meas AS m
+        JOIN {schema}.exposure AS e ON m.exposure = e.exposure
         WHERE m.objectid = '{objectid}'
-          AND m.{mag_col} IS NOT NULL
-          {band_cut}
-          {qual_cut}
+        AND m.{mag_col} IS NOT NULL
+        {band_cut}
+        {qual_cut}
         ORDER BY m.mjd
     """
     
@@ -111,24 +112,29 @@ def fetch_nsc_lc(source_id, ra, dec, radius_arcsec=2.0, mag_choice="auto", band=
     if raw.empty:
         return result("no_data")
 
-    raw = raw.dropna(subset=["mjd", "mag", "magerr", "exposure"]).reset_index(drop=True)
+    raw = raw.dropna(subset=["mjd", "mag", "magerr", "instrument", "exptime"]).reset_index(drop=True)
     if len(raw) == 0:
         return result("filtered_out")
 
     # 3. Dynamic Time Standardization (The CTIO vs KPNO split)
     bjd_tdb = np.zeros(len(raw))
     coord = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
+
+    # m.mjd is the exposure START. Add 0.5*exptime per row (NSC exposure times vary
+    # across DECam / Mosaic3 / 90Prime) to place the timestamp at mid-exposure,
+    # matching the convention used for the other surveys.
+    raw["mjd_mid"] = raw["mjd"].astype(float) + 0.5 * raw["exptime"].astype(float) / 86400.0
     
-    kpno_mask = raw["exposure"].str.contains('k4m|ksb', case=False, na=False)
+    kpno_mask = raw["instrument"].isin(["k4m", "ksb"])
     ctio_mask = ~kpno_mask
 
     # Calculate precise barycentric times based on which hemisphere took the image
     if kpno_mask.any():
-        t_kpno = Time(raw.loc[kpno_mask, "mjd"].to_numpy(float), format="mjd", scale="utc", location=KPNO)
+        t_kpno = Time(raw.loc[kpno_mask, "mjd_mid"].to_numpy(float), format="mjd", scale="utc", location=KPNO)
         bjd_tdb[kpno_mask] = (t_kpno.tdb + t_kpno.light_travel_time(coord, kind="barycentric")).jd
 
     if ctio_mask.any():
-        t_ctio = Time(raw.loc[ctio_mask, "mjd"].to_numpy(float), format="mjd", scale="utc", location=CTIO)
+        t_ctio = Time(raw.loc[ctio_mask, "mjd_mid"].to_numpy(float), format="mjd", scale="utc", location=CTIO)
         bjd_tdb[ctio_mask] = (t_ctio.tdb + t_ctio.light_travel_time(coord, kind="barycentric")).jd
 
     # 4. Flux Standardization: AB Magnitude to microJanskys (uJy)
