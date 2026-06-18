@@ -11,3 +11,4 @@ dist/
 venv/
 env/
 ENV/
+survey_info.txt
