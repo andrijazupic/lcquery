@@ -176,7 +176,7 @@ Per survey you can set:
 - **ATLAS has no search radius** because it does *forced photometry*: the server gets an
   exact (ra, dec) and it measures the flux at that precise point on every image, whether or
   not anything is catalogued there. There is no catalogue to search, so nothing for a radius
-  to bound so the coordinates *are* the query.
+  to bound.
 
 - **"No data" is expected due to sky coverage.** Surveys have footprints and selection
   functions: southern surveys (SkyMapper, OGLE) won't have northern targets, CRTS excludes the
