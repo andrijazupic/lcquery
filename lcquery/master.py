@@ -4,7 +4,7 @@ import datetime
 import importlib
 import pandas as pd
 import yaml
-
+from .surveys.band_reference import SURVEY_REFERENCE, write_band_reference   # <-- added
 # survey -> (module under lcquery.surveys, fetcher name). Loaded lazily so a missing
 # optional dependency disables only that survey instead of breaking `import lcquery`.
 _FETCHERS = {
@@ -16,20 +16,21 @@ _FETCHERS = {
     "OGLE": ("ogle", "fetch_ogle_lc"), "Gaia": ("gaia", "fetch_gaia_lc"),
     "CHEOPS": ("cheops", "fetch_cheops_lc"),
 }
-
 DEFAULT_CONFIG = {
     "output": {"base_dir": "lightcurves", "overwrite": False, "write_header_comments": False},
     "defaults": {"clean": True},
     "credentials": {"atlas_token": "", "gaia_user": "", "gaia_password": ""},
     "surveys": {name: {"enabled": True} for name in _FETCHERS},
 }
-
-
 def _get_fetcher(name):
     mod, func = _FETCHERS[name]
     return getattr(importlib.import_module(f"{__package__}.surveys.{mod}"), func)
-
-
+def _flux_system(survey_name):                                               # <-- added
+    """Survey-level photometric system for the flux columns: 'AB' / 'Vega',
+    'mixed' for surveys whose bands differ (ASAS-SN), or 'unknown' if unaudited.
+    Per-band detail (zero point, bandpass, etc.) lives in band_reference.csv."""
+    s = (SURVEY_REFERENCE.get(survey_name) or {}).get("system", "unknown")
+    return {"per-band": "mixed", "UNAUDITED": "unknown"}.get(s, s)
 def load_config(config=None):
     """Resolution order: dict/path -> ./config.yaml -> <repo>/config.yaml
     -> <repo>/config.example.yaml -> built-in DEFAULT_CONFIG."""
@@ -47,16 +48,12 @@ def load_config(config=None):
         return DEFAULT_CONFIG
     with open(config) as f:
         return yaml.safe_load(f) or DEFAULT_CONFIG
-
-
 def _accepted(func, kwargs):
     sig = inspect.signature(func)
     if any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
         return dict(kwargs)
     names = set(sig.parameters)
     return {k: v for k, v in kwargs.items() if k in names and k not in ("source_id", "ra", "dec")}
-
-
 def _credential_kwargs(survey, creds):
     if survey == "ATLAS":
         tok = creds.get("atlas_token") or os.environ.get("ATLASFORCED_SECRET_KEY")
@@ -66,8 +63,6 @@ def _credential_kwargs(survey, creds):
         p = creds.get("gaia_password") or os.environ.get("GAIA_PASSWORD")
         return {"auth": [u, p]} if (u and p) else {}
     return {}
-
-
 def _save_csv(df, path, header_lines=None):
     if header_lines:
         with open(path, "w") as f:
@@ -76,8 +71,6 @@ def _save_csv(df, path, header_lines=None):
         df.to_csv(path, mode="a", index=False)
     else:
         df.to_csv(path, index=False)
-
-
 def update_master_metadata(meta_dict, meta_file):
     df_new = pd.DataFrame([meta_dict])
     if os.path.exists(meta_file):
@@ -88,8 +81,6 @@ def update_master_metadata(meta_dict, meta_file):
     else:
         df_combined = df_new
     df_combined.to_csv(meta_file, index=False)
-
-
 def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
                         overwrite=None, base_dir=None, verbose=True):
     cfg = load_config(config)
@@ -102,10 +93,9 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
     write_hdr = out_cfg.get("write_header_comments", False)
     meta_file = os.path.join(base_dir, "query_metadata.csv")
     os.makedirs(base_dir, exist_ok=True)
-
+    write_band_reference(os.path.join(base_dir, "band_reference.csv"))       # <-- added: self-describing per-band dictionary
     if verbose:
         print(f"\n--- Processing Source ID: {source_id} ---")
-
     for survey_name in _FETCHERS:
         scfg = surveys.get(survey_name, {}) or {}
         enabled = (survey_name in survey_list) if survey_list is not None else scfg.get("enabled", True)
@@ -116,15 +106,12 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
         except Exception as e:
             if verbose: print(f"[{survey_name}] unavailable ({type(e).__name__}) - install its dependency to enable. Skipping.")
             continue
-
         kwargs = {**defaults, **{k: v for k, v in scfg.items() if k != "enabled"}}
         kwargs.update(_credential_kwargs(survey_name, creds))
         kwargs = _accepted(fetch_func, kwargs)
-
         survey_dir = os.path.join(base_dir, survey_name)
         os.makedirs(survey_dir, exist_ok=True)
         file_path = os.path.join(survey_dir, f"{source_id}.csv")
-
         if os.path.exists(file_path) and not overwrite:
             if verbose: print(f"[{survey_name}] Cached file found. Skipping download.")
             n = len(pd.read_csv(file_path, comment="#"))
@@ -141,24 +128,22 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
             if not df.empty:
                 hdr = None
                 if write_hdr:
-                    flux_sys = "Vega" if survey_name in ("OGLE", "CRTS") else "AB"
+                    flux_sys = _flux_system(survey_name)                     # <-- changed
                     hdr = [f"survey={survey_name}", f"source_id={source_id}", f"ra={ra} dec={dec}",
                            f"params={kwargs}",
-                           f"columns: BJD=BJD_TDB(JD), Target_flux=uJy({flux_sys}), Target_flux_err=uJy({flux_sys}), Filter=band"]
+                           f"columns: BJD=BJD_TDB(JD), Target_flux=uJy({flux_sys}), Target_flux_err=uJy({flux_sys}), Filter=band; per-band systems in band_reference.csv"]
                 _save_csv(df, file_path, hdr)
                 if verbose: print(f"[{survey_name}] Saved {n} observations to {file_path}")
             elif verbose:
                 print(f"[{survey_name}] No valid data found ({status}).")
-
         radius = kwargs.get("radius_arcsec")
         runit = "arcsec" if "radius_arcsec" in kwargs else ""
         update_master_metadata({
             "source_id": int(source_id), "ra": ra, "dec": dec, "survey": survey_name,
             "observations": n, "status": status, "clean": kwargs.get("clean"),
             "radius": radius, "radius_unit": runit, "time_unit": "BJD_TDB", 
-            "flux_unit": "uJy_Vega" if survey_name in ("OGLE", "CRTS") else "uJy_AB",
+            "flux_unit": f"uJy_{_flux_system(survey_name)}",                  # <-- changed
             "queried_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         }, meta_file)
-
     if verbose:
         print(f"--- Done with {source_id} ---")
