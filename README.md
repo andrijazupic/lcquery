@@ -2,12 +2,7 @@
 
 **Multi-survey time-domain light curves on a single, physically uniform schema.**
 
-Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries a dozen
-photometric archives, standardizes every light curve to **BJD_TDB** time and
-**micro-Jansky** flux, and writes one CSV per source per survey. The point is
-comparability: a ZTF point, a Gaia point, and an ASAS-SN point all land on the same time
-and flux axes, so you can overplot and model them together instead of wrangling each
-survey's native conventions one at a time.
+Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries a dozen photometric archives, standardizes every light curve to **BJD_TDB** time and **micro-Jansky** flux, and writes one CSV per source per survey. The point is comparability: a ZTF point, a Gaia point, and an ASAS-SN point all land on the same time and flux axes, so you can overplot and model them together instead of wrangling each survey's native conventions one at a time.
 
 ## Surveys
 
@@ -28,22 +23,15 @@ survey's native conventions one at a time.
 | OGLE | `ogle-i/v` | **Vega** | detection (PSF/DIA) | position (cone) |
 | Gaia | `gaia-g/bp/rp` | AB | per-transit (to G≈21) | Gaia DR3 ID |
 
-† TESS and K2 are each a single broad band; the trailing number is the exposure cadence in
-**seconds**, so `tess-spoc-120` and `tess-spoc-1800` are the same passband sampled at 2 min
-vs 30 min.
+† TESS and K2 are each a single broad band; the trailing number is the exposure cadence in **seconds**, so `tess-spoc-120` and `tess-spoc-1800` are the same passband sampled at 2 min vs 30 min.
 
-‡ ASAS-SN is the one survey whose two bands sit on different systems: **`asassn-g` is AB,
-`asassn-v` is Vega** (a Johnson-V-like band, empirically ≈ +0.06 mag from AB). Its files
-therefore carry both systems — resolve per band via the `Filter` column and
-`band_reference.csv` (below), and its `query_metadata.csv` flux unit reads `uJy_mixed`.
+‡ ASAS-SN is the one survey whose two bands sit on different systems: **`asassn-g` is AB, `asassn-v` is Vega** (a Johnson-V-like band, empirically ≈ +0.06 mag from AB). Its files therefore carry both systems — resolve per band via the `Filter` column and `band_reference.csv` (below), and its `query_metadata.csv` flux unit reads `uJy_mixed`.
 
 ## How light curves are standardized
 
 ### Time → `BJD_TDB`
 
-Every timestamp is converted to **Barycentric Julian Date on the TDB scale** (full JD), so
-epochs from different surveys are directly comparable. Surveys arrive in one of three native
-conventions, each handled differently:
+Every timestamp is converted to **Barycentric Julian Date on the TDB scale** (full JD), so epochs from different surveys are directly comparable. Surveys arrive in one of three native conventions, each handled differently:
 
 - **Topocentric (observer-frame) MJD in UTC** — ATLAS, BlackGEM, CRTS, J-VAR, NSC,
   SkyMapper, ZTF. Converted UTC → TDB and given a barycentric light-travel correction
@@ -55,21 +43,13 @@ conventions, each handled differently:
 - **Already barycentric** — Gaia (TCB transit time), K2 (BKJD), TESS (BTJD). No light-travel
   correction is applied; only the time scale is put onto TDB (a ~20 s shift for Gaia's TCB).
 
-Where a survey reports the **exposure start** and the exposure length is known, the pipeline
-adds half the exposure to place the timestamp at **mid-exposure**, matching the rest of the
-pipeline (ATLAS, NSC, SkyMapper, ZTF; BlackGEM is already mid-exposure via GPS timing). NSC's
-exposure time is read per-row, since it varies across its constituent surveys.
+Where a survey reports the **exposure start** and the exposure length is known, the pipeline adds half the exposure to place the timestamp at **mid-exposure**, matching the rest of the pipeline (ATLAS, NSC, SkyMapper, ZTF; BlackGEM is already mid-exposure via GPS timing). NSC's exposure time is read per-row, since it varies across its constituent surveys.
 
-Absolute-timing floors worth knowing: **ASAS-SN's field-centre HJD is good only to ~200 s**
-unless recomputed with its aperture pipeline, and **CRTS / J-VAR carry a start-vs-mid
-ambiguity of order 10–60 s**. The per-survey timing convention is recorded in `band_reference.csv`.
+Absolute-timing floors worth knowing: **ASAS-SN's field-centre HJD is good only to ~200 s** unless recomputed with its aperture pipeline, and **CRTS / J-VAR carry a start-vs-mid ambiguity of order 10–60 s**. The per-survey timing convention is recorded in `band_reference.csv`.
 
 ### Flux → µJy
 
-`Target_flux` and `Target_flux_err` are in **micro-Janskys**. For magnitude-based surveys the
-conversion is `flux = 10^((ZP − mag) / 2.5)`, with `ZP = 23.9` for AB (3631 Jy). Surveys that
-deliver flux natively are scaled directly: ATLAS and BlackGEM already report AB µJy; Gaia,
-TESS, and K2 convert from e⁻/s with a fixed per-band zero point.
+`Target_flux` and `Target_flux_err` are in **micro-Janskys**. For magnitude-based surveys the conversion is `flux = 10^((ZP − mag) / 2.5)`, with `ZP = 23.9` for AB (3631 Jy). Surveys that deliver flux natively are scaled directly: ATLAS and BlackGEM already report AB µJy; Gaia, TESS, and K2 convert from e⁻/s with a fixed per-band zero point.
 
 Two photometric systems are in play:
 
@@ -78,11 +58,7 @@ Two photometric systems are in play:
   (Kepler 3241.90 Jy, TESS 2631.88 Jy, Cousins-I 2416 Jy, Johnson-V 3636 Jy; exact values in
   `band_reference.csv`).
 
-**Negative and low-significance fluxes are kept on purpose.** The forced-photometry surveys
-(ATLAS, TESS, K2, ASAS-SN) retain faint and slightly-negative measurements with their error
-bars rather than clipping at `flux > 0`, because discarding them would bias the noise floor
-that SNR-based period searches depend on. Expect negative points in faint light curves since they
-are valid measurements, not errors.
+**Negative and low-significance fluxes are kept on purpose.** The forced-photometry surveys (ATLAS, TESS, K2, ASAS-SN) retain faint and slightly-negative measurements with their error bars rather than clipping at `flux > 0`, because discarding them would bias the noise floor that SNR-based period searches depend on. Expect negative points in faint light curves since they are valid measurements, not errors.
 
 ## Data cleaning
 
@@ -94,8 +70,7 @@ Most surveys carry a `clean` switch (default `True`):
 - **`clean=False`** keeps more points but still removes the obvious garbage that would break
   downstream code: NaN times/fluxes, non-positive errors, and non-detection sentinels.
 
-A few surveys (TESS, K2, ZTF) apply their standard quality mask unconditionally and expose no
-`clean` toggle; their `clean` column in `query_metadata.csv` is therefore blank.
+A few surveys (TESS, K2, ZTF) apply their standard quality mask unconditionally and expose no `clean` toggle; their `clean` column in `query_metadata.csv` is therefore blank.
 
 ## Installation
 
@@ -109,8 +84,7 @@ source .venv/bin/activate
 pip install -e ".[all]"     # all surveys
 ```
 
-Use `pip install -e .` for the ten core surveys only; `[all]` adds the heavier optional
-clients for **BlackGEM** (Google BigQuery) and **CHEOPS** (DACE).
+Use `pip install -e .` for the ten core surveys only; `[all]` adds the heavier optional clients for **BlackGEM** (Google BigQuery) and **CHEOPS** (DACE).
 
 ## Authentication
 
@@ -126,14 +100,11 @@ r = requests.post("https://fallingstar-data.com/forcedphot/api-token-auth/",
 print(r.json()["token"])
 ```
 
-Paste the printed token into `config.yaml` under `credentials: → atlas_token:` (or export it
-as the `ATLASFORCED_SECRET_KEY` environment variable).
+Paste the printed token into `config.yaml` under `credentials: → atlas_token:` (or export it as the `ATLASFORCED_SECRET_KEY` environment variable).
 
-**Gaia** — optional. You can add `gaia_user` / `gaia_password` to `config.yaml`, but
-epoch-photometry queries work fine without logging in.
+**Gaia** — optional. You can add `gaia_user` / `gaia_password` to `config.yaml`, but epoch-photometry queries work fine without logging in.
 
-**BlackGEM** — requires Google Cloud access. Authenticate once with the Google Cloud CLI
-(`gcloud auth application-default login`); no token goes in the config.
+**BlackGEM** — requires Google Cloud access. Authenticate once with the Google Cloud CLI (`gcloud auth application-default login`); no token goes in the config.
 
 ## Quick start
 
@@ -148,13 +119,11 @@ dec = 19.0727344751
 get_all_lightcurves(source_id, ra, dec, verbose=True)
 ```
 
-This writes CSVs to disk (it does not return a DataFrame). To restrict a single call to a
-subset of surveys, pass `survey_list=["ZTF", "TESS"]`.
+This writes CSVs to disk (it does not return a DataFrame). To restrict a single call to a subset of surveys, pass `survey_list=["ZTF", "TESS"]`.
 
 ## Output
 
-Light curves are written under `lightcurves/`, one folder per survey, each CSV named by the
-source's Gaia DR3 ID:
+Light curves are written under `lightcurves/`, one folder per survey, each CSV named by the source's Gaia DR3 ID:
 
 ```
 lightcurves/
@@ -177,18 +146,12 @@ df = pd.read_csv("lightcurves/ZTF/3398501003057791360.csv", comment="#")
 **`query_metadata.csv`** logs one row per (source, survey) with: `source_id`, `ra`, `dec`,
 `survey`, `observations`, `status` (`success`, `no_match`, `no_data`, `filtered_out`, …),
 `clean`, `radius` / `radius_unit`, `time_unit` (always `BJD_TDB`), `flux_unit` (`uJy_AB`,
-`uJy_Vega`, or `uJy_mixed` for ASAS-SN), and `queried_utc`. The `status` column tells you
-*why* a survey returned nothing, and the file is updated in place — re-running a source
-overwrites its rows rather than duplicating them.
+`uJy_Vega`, or `uJy_mixed` for ASAS-SN), and `queried_utc`. The `status` column tells you *why* a survey returned nothing, and the file is updated in place — re-running a source overwrites its rows rather than duplicating them.
 
-**`band_reference.csv`** is a self-describing data dictionary written on every run. It has one
-row per survey giving the photometric `system`, zero-point flux (`zp_Jy`), `phot` type,
-`timing` convention, `cadence`, and `bands`, plus extra rows for the per-band overrides where
-a survey's bands differ (`asassn-g`/`asassn-v`, `ogle-i`/`ogle-v`). Those are the rows with
-the `filter` column filled in.
+**`band_reference.csv`** is a self-describing data dictionary written on every run. It has one row per survey giving the photometric `system`, zero-point flux (`zp_Jy`), `phot` type,
+`timing` convention, `cadence`, and `bands`, plus extra rows for the per-band overrides where a survey's bands differ (`asassn-g`/`asassn-v`, `ogle-i`/`ogle-v`). Those are the rows with the `filter` column filled in.
 
-**Caching.** If a CSV already exists it is skipped on the next run. Pass `overwrite=True` (or
-set it in the config) to re-download.
+**Caching.** If a CSV already exists it is skipped on the next run. Pass `overwrite=True` (or set it in the config) to re-download.
 
 ## Configuration
 
