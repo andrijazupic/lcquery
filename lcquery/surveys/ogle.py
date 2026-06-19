@@ -211,9 +211,11 @@ def fetch_ogle_lc(source_id, ra, dec, radius_arcsec=2.0, clean=True):
 
     It removes the heliocentric light-travel correction OGLE applied (recovering the
     topocentric UTC observation time at the 1.3 m Warsaw Telescope), then re-applies
-    the barycentric correction with the UTC -> TDB scale shift. The HJD<->BJD
-    difference is up to +/-4 s and varies annually, so the round trip -- not a constant
-    offset -- is what produces a correct BJD_TDB. Residuals are all negligible: site
+    the barycentric correction with the UTC -> TDB scale shift. The HJD<->BJD difference 
+    is up to ~4 s and drifts over years -- it is the Sun's wobble around the barycentre, 
+    dominated by Jupiter's ~12 yr orbit, since Earth's annual motion cancels in the 
+    difference -- so the round trip (not a constant offset) is what produces a 
+    correct BJD_TDB. Residuals are all negligible: site
     choice < 21 ms (single site); light-travel time evaluated at the HJD epoch versus
     the true epoch costs << 1 ms; and the UTC-timescale assumption (OGLE doesn't state
     TT) would at worst add a ~constant ~69 s shift, invisible to an hour-to-day period

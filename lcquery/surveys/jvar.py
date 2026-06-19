@@ -65,8 +65,11 @@ def fetch_jvar_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
     from FILTER (uppercased) via _JVAR_BANDS: jvar-g/jvar-r/jvar-i for the SDSS broad
     bands and jvar-j0395/j0515/j0660/j0861 for the narrow bands (exactly seven of the
     twelve J-PLUS filters). Detection aperture photometry from the JAST80 telescope
-    at the Observatorio Astrofisico de Javalambre (OAJ); >= 11 epochs per field,
-    three images per filter per visit.
+    at the Observatorio Astrofisico de Javalambre (OAJ); >= 11 epochs per field spread 
+    over ~1 yr, three images per filter per visit. Per-filter exposures: g 33 s, r 40 s, 
+    i 34 s, J0395 87 s, J0515 40 s, J0660 135 s, J0861 160 s; the seven filters are 
+    cycled three times per visit, giving ~12.7 min median between consecutive same-band 
+    exposures.
 
     Time -> BJD_TDB. The per-epoch MJD is the per-image observation time on the UTC
     scale, topocentric (the CEFCA/jype pipeline records the observation-frame MJD; no

@@ -1,19 +1,19 @@
 # The light curves carry a `Filter` label;
 # join it here to know exactly what each flux column means.
 SURVEY_REFERENCE = {
-    "ATLAS":     {"system": "AB",   "zp_Jy": 3631,    "phot": "forced (PSF)",               "timing": "mid-exposure (native)",                        "exposure": "30 s",                "bands": "c,o"},
-    "BlackGEM":  {"system": "AB",   "zp_Jy": 3631,    "phot": "forced (optimal)",           "timing": "mid (GPS-exact)",                              "exposure": "~60 s",               "bands": "u,g,q,r,i,z"},
-    "Gaia":      {"system": "AB",   "zp_Jy": 3631,    "phot": "per-transit (to G~21)",      "timing": "barycentric (native)",                         "exposure": "per-transit",         "bands": "g,bp,rp"},
-    "J-VAR":     {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (aperture)",       "timing": "(±tens s, start/mid uncertain)",               "exposure": "varies",              "bands": "g,r,i,j0395,j0515,j0660,j0861"},
-    "NSC":       {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (aperture)",       "timing": "mid-exposure",                                 "exposure": "varies",              "bands": "u,g,r,i,z,y,vr"},
-    "SkyMapper": {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (PSF)",            "timing": "mid-exposure",                                 "exposure": "100 s (Main)",        "bands": "u,v,g,r,i,z"},
-    "ZTF":       {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (PSF, matchfile)", "timing": "mid-exposure",                                 "exposure": "30 s",                "bands": "g,r,i"},
-    "CRTS":      {"system": "Vega", "zp_Jy": 3636,    "phot": "detection (aperture)",       "timing": "(±15 s, start/mid uncertain)",                 "exposure": "30 s",                "bands": "clear (≈V)"},
-    "OGLE":      {"system": "Vega", "zp_Jy": None,    "phot": "detection (PSF/DIA)",        "timing": "HJD (helio round-trip; start/mid unverified)", "exposure": "varies",              "bands": "i,v"},
-    "K2":        {"system": "Vega", "zp_Jy": 3241.9,  "phot": "forced (PDCSAP)",            "timing": "barycentric mid (native)",                     "exposure": "60/1800 s (cadence)", "bands": "Kepler"},
-    "TESS":      {"system": "Vega", "zp_Jy": 2631.88, "phot": "forced (PDCSAP)",            "timing": "barycentric mid (native)",                     "exposure": "20-1800 s (cadence)", "bands": "TESS"},
-    "ASAS-SN":   {"system": "per-band","zp_Jy": None, "phot": "forced (aperture)",          "timing": "HJD, ~200 s field-centre floor",               "exposure": "~90 s",               "bands": "g (AB), v (Vega)"},
-   #"CHEOPS":    {"system": "UNAUDITED","zp_Jy": None,"phot": "forced (aperture)",          "timing": "?",                                            "exposure": "?",                   "bands": "white"},
+    "ATLAS":     {"system": "AB",   "zp_Jy": 3631,    "phot": "forced (PSF)",               "timing": "topocentric UTC, mid-exposure (native)",      "exposure": "30 s",                            "cadence": "~1-2 d (4 exp/visit over ~1 hr)",          "bands": "c,o"},
+    "BlackGEM":  {"system": "AB",   "zp_Jy": 3631,    "phot": "forced (optimal)",           "timing": "topocentric UTC, mid-exposure (GPS)",         "exposure": "60 s",                            "cadence": "1 min-2 hr (program-dependent)",           "bands": "u,g,q,r,i,z"},
+    "Gaia":      {"system": "AB",   "zp_Jy": 3631,    "phot": "per-transit (to G~21)",      "timing": "barycentric TCB, FoV-transit (native)",       "exposure": "4.85 s/CCD (~44 s transit)",      "cadence": "irregular; 106 min in-pair, ~40/3 yr",     "bands": "g,bp,rp"},
+    "J-VAR":     {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (aperture)",       "timing": "topocentric UTC, start/mid unstated",         "exposure": "g33 r40 i34 J0395-87 J0515-40 J0660-135 J0861-160 s", "cadence": "~11 epochs/~1 yr (~12.7 min in-visit)", "bands": "g,r,i,j0395,j0515,j0660,j0861"},
+    "NSC":       {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (aperture)",       "timing": "topocentric UTC, start (DATE-OBS; +0.5exp)",  "exposure": "varies (archival)",               "cadence": "irregular (archival)",                     "bands": "u,g,r,i,z,y,vr"},
+    "SkyMapper": {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (PSF)",            "timing": "topocentric UTC, start (+0.5exp applied)",    "exposure": "100 s (Main), 5-40 s (Shallow)",  "cadence": "irregular/relaxed",                        "bands": "u,v,g,r,i,z"},
+    "ZTF":       {"system": "AB",   "zp_Jy": 3631,    "phot": "detection (PSF, matchfile)", "timing": "topocentric UTC, start (+0.5exp applied)",    "exposure": "30 s (public); 30-300 s (private)","cadence": "~2-3 d (public); min (HC programs)",      "bands": "g,r,i"},
+    "CRTS":      {"system": "Vega", "zp_Jy": 3636,    "phot": "detection (aperture)",       "timing": "topocentric UTC, start/mid unstated (<=15 s)","exposure": "30 s",                            "cadence": "~weeks (~20 d); 4 exp/visit over ~30 min", "bands": "clear (≈V)"},
+    "OGLE":      {"system": "Vega", "zp_Jy": None,    "phot": "detection (PSF/DIA)",        "timing": "heliocentric UTC (HJD), start/mid unstated",  "exposure": "100 s I, 150 s V; 25 s disk",     "cadence": "19-60 min (bulge) to 1-3 d (disk/MC)",     "bands": "i,v"},
+    "K2":        {"system": "Vega", "zp_Jy": 3241.9,  "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "6.02 s/frame",                    "cadence": "58.85 s (SC) / 1766 s (LC)",               "bands": "Kepler"},
+    "TESS":      {"system": "Vega", "zp_Jy": 2631.88, "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "2 s/frame",                       "cadence": "20/120 s (TPF), 200/600/1800 s (FFI)",     "bands": "TESS"},
+    "ASAS-SN":   {"system": "per-band","zp_Jy": None, "phot": "forced (aperture)",          "timing": "heliocentric UTC (HJD), field-centre ~200 s", "exposure": "90 s (x3/epoch)",                 "cadence": "~nightly (g); ~2-3 d (V)",                 "bands": "g (AB), v (Vega)"},
+   #"CHEOPS":    {"system": "UNAUDITED","zp_Jy": None,"phot": "forced (aperture)",          "timing": "?",                                           "exposure": "?",                               "cadence": "?",                                        "bands": "white"},
 }
 # Per-band overrides where bands differ from the survey default (only these need them).
 BAND_OVERRIDE = {

@@ -23,7 +23,7 @@ Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries 
 | OGLE | `ogle-i/v` | **Vega** | detection (PSF/DIA) | position (cone) |
 | Gaia | `gaia-g/bp/rp` | AB | per-transit (to G≈21) | Gaia DR3 ID |
 
-† TESS and K2 are each a single broad band; the trailing number is the exposure cadence in **seconds**, so `tess-spoc-120` and `tess-spoc-1800` are the same passband sampled at 2 min vs 30 min.
+† TESS and K2 are each a single broad band; the trailing number is the sampling cadence in seconds — not the exposure, since the per-frame integration is ~2 s for TESS and ~6 s for K2 — so `tess-spoc-120` and `tess-spoc-1800` are the same passband sampled at 2 min vs 30 min.
 
 ‡ ASAS-SN is the one survey whose two bands sit on different systems: **`asassn-g` is AB, `asassn-v` is Vega** (a Johnson-V-like band, empirically ≈ +0.06 mag from AB). Its files therefore carry both systems — resolve per band via the `Filter` column and `band_reference.csv` (below), and its `query_metadata.csv` flux unit reads `uJy_mixed`.
 
@@ -37,9 +37,7 @@ Every timestamp is converted to **Barycentric Julian Date on the TDB scale** (fu
   SkyMapper, ZTF. Converted UTC → TDB and given a barycentric light-travel correction
   computed at the source position.
 - **Heliocentric JD (HJD)** — ASAS-SN, OGLE. The heliocentric correction is first *undone*
-  (recovering topocentric UTC), then redone to the barycentre. Because the HJD↔BJD difference
-  varies through the year (up to a few seconds), this round trip — not a constant offset — is
-  what yields a correct `BJD_TDB`.
+  (recovering topocentric UTC), then redone to the barycentre. Because the HJD↔BJD difference drifts by up to a few seconds over years — the Sun's wobble around the barycentre, driven mainly by Jupiter's ~12-yr orbit, since Earth's annual motion cancels in the difference — this round trip, not a constant offset, is what yields a correct `BJD_TDB`.
 - **Already barycentric** — Gaia (TCB transit time), K2 (BKJD), TESS (BTJD). No light-travel
   correction is applied; only the time scale is put onto TDB (a ~20 s shift for Gaia's TCB).
 
@@ -149,7 +147,7 @@ df = pd.read_csv("lightcurves/ZTF/3398501003057791360.csv", comment="#")
 `uJy_Vega`, or `uJy_mixed` for ASAS-SN), and `queried_utc`. The `status` column tells you *why* a survey returned nothing, and the file is updated in place — re-running a source overwrites its rows rather than duplicating them.
 
 **`band_reference.csv`** is a self-describing data dictionary written on every run. It has one row per survey giving the photometric `system`, zero-point flux (`zp_Jy`), `phot` type,
-`timing` convention, `cadence`, and `bands`, plus extra rows for the per-band overrides where a survey's bands differ (`asassn-g`/`asassn-v`, `ogle-i`/`ogle-v`). Those are the rows with the `filter` column filled in.
+`timing` convention, `exposure`, `cadence`, and `bands`, plus extra rows for the per-band overrides where a survey's bands differ (`asassn-g`/`asassn-v`, `ogle-i`/`ogle-v`). Those are the rows with the `filter` column filled in.
 
 **Caching.** If a CSV already exists it is skipped on the next run. Pass `overwrite=True` (or set it in the config) to re-download.
 
