@@ -11,17 +11,11 @@ from astropy.time import Time
 
 _COLS = ["BJD", "Target_flux", "Target_flux_err", "Filter"]
 
-# Catalina Schmidt (CSS) station, Mt. Bigelow, AZ -- the telescope behind the
-# photcat data. Topocentric term is sub-ms, so the exact site barely matters,
-# but CSS is the correct one for the returned photometry.
 CATALINA = EarthLocation.from_geodetic(
     lon=-110.7317 * u.deg, lat=32.4417 * u.deg, height=2510.0 * u.m)
 
-# CRTS is unfiltered, transformed to approximate Johnson V (Vega), NOT AB.
-# Convert via the V-band Vega zero-point flux (~3631 Jy); numerically ~the AB
-# 23.9, but it is the V (Vega) zero point.
-V_F0_JY = 3631.0
-V_ZP_UJY = 2.5 * np.log10(V_F0_JY * 1e6)             # ~23.90; flux = 10**((V_ZP_UJY - mag)/2.5)
+V_F0_JY = 3636.0
+V_ZP_UJY = 2.5 * np.log10(V_F0_JY * 1e6)           
 
 _CGI = "http://nunuku.caltech.edu/cgi-bin/getcssconedb_release_img.cgi"
 
@@ -60,7 +54,7 @@ def _fetch_table(ra, dec, radius_arcmin, database, timeout, retries):
             if not m:
                 m = re.search(r'href=["\']?([^\s"\'<>]+\.csv)', text, re.I)
             if not m:
-                return None, "no_link"          # got a page, no CSV -> no data / no coverage
+                return None, "no_link"        
             csv_url = urljoin(r.url, m.group(1))
             rr = requests.get(csv_url, timeout=timeout)
             rr.raise_for_status()
@@ -76,15 +70,50 @@ def _fetch_table(ra, dec, radius_arcmin, database, timeout, retries):
 def fetch_crts_lc(source_id, ra, dec, radius_arcsec=6.0,
                   database="photcat", timeout=90, retries=3, clean=True):
     """
-    CRTS / CSDR3 light curve for one source, via the single-position cone search.
+    --------------------------------------------------------------------------------
+    CRTS / CSDR  (Catalina Real-Time Transient Survey / Catalina Surveys Data Release)
+    --------------------------------------------------------------------------------
+    Access. Single-position cone search against the Catalina Surveys photometry
+    server (getcssconedb_release_img.cgi, database photcat), submitted as
+    multipart/form-data (the CGI ignores urlencoded POSTs). Returns one CSV with
+    columns MasterID, Mag, Magerr, RA, Dec, MJD, Blend. If more than one MasterID
+    falls in the cone, only the object nearest the input position is kept. Filter
+    label: crts-clear (CSS observes unfiltered). Detection (not forced) SExtractor
+    aperture photometry from the 0.7 m Catalina Schmidt; 30 s exposures, four per
+    field separated by ~10 min.
 
-    time   : BJD_TDB (full JD). Service gives MJD (UTC, topocentric); we apply
-             the same barycentric correction as BlackGEM/ZTF.
-    flux   : approximate-V (Vega) flux density in micro-Jy via the V zero point
-             (~3631 Jy). Same UNIT as the others, but a clear/V-ish band
-             (~between Sloan g and r) and noisy -- watch bright outliers
-             (blend/saturation artifacts).
-    filter : "crts-clear" (CSS observes unfiltered; mags are approx-V calibrated).
+    Time -> BJD_TDB. The server returns the topocentric (Earth-based, uncorrected)
+    observed time as MJD on the UTC scale (confirmed by the standard literature
+    practice of barycentre-correcting CRTS times before folding). The code treats it
+    as topocentric UTC at the Catalina Schmidt site, scale-converts to TDB, and adds
+    the barycentric light-travel time to the source:
+
+        t       = Time(MJD, format="mjd", scale="utc", location=CATALINA)
+        BJD_TDB = (t.tdb + t.light_travel_time(source_coord, kind="barycentric")).jd
+
+    The observatory choice affects only the sub-millisecond topocentric term, so it
+    is valid for all photcat sub-surveys. A <= 15 s start-vs-midpoint ambiguity on
+    the 30 s exposures is undocumented but negligible for hour-to-day periods.
+
+    Flux -> uJy. CRTS is unfiltered, with the instrumental magnitude transformed to
+    an approximate Johnson/Cousins V (Vega-based) using standard stars; the single
+    Mag column is this V_CSS magnitude. It is converted to flux density via
+    flux[uJy] = 10^((ZP - Mag)/2.5) with ZP = 2.5*log10(3636e6) = 23.9015
+    (zero-point flux 3636 Jy, the Johnson V Vega value), and
+    flux_err = flux * Magerr / 1.0857. System "Vega", F0 = 3636 Jy. The 3636 Jy
+    Johnson-V Vega constant is used for internal consistency: V_CSS is a Vega V band,
+    so it matches both the "Vega" label and the ogle-v override, which is the same
+    kind of band. (The earlier AB value 3631 Jy differed by only ~0.0015 mag -- about
+    50x below CRTS's own calibration scatter -- so the change is cosmetic for the
+    science.) The result is an approximate-V (Vega) flux density in uJy, suitable for
+    relative variability, not precise absolute or cross-band photometry.
+
+    Cleaning. Always: drop NaN in Mag, Magerr, MJD. With clean=True: keep Blend == 0
+    (the CSDR blending flag marking sources unresolved from a neighbour within
+    ~2-3 arcsec) and Magerr > 0; with clean=False, only Magerr > 0. Multi-object
+    cones are reduced to the nearest MasterID. Not applied (optional hardening): a
+    magnitude cut (~11.5 < V < 20) to drop saturation artifacts and faint-end noise
+    where CSDR photometry is least reliable.
     """
     sid = int(source_id)
     def result(status, df=None):
@@ -113,23 +142,20 @@ def fetch_crts_lc(source_id, ra, dec, radius_arcsec=6.0,
     if len(raw) == 0:
         return result("filtered_out")
 
-    # If the cone caught >1 object, keep the nearest to the input position.
     if raw["MasterID"].nunique() > 1:
         sep2 = ((raw["RA"] - float(ra)) * np.cos(np.radians(float(dec)))) ** 2 \
                + (raw["Dec"] - float(dec)) ** 2
         raw = raw[raw["MasterID"] == raw.loc[sep2.idxmin(), "MasterID"]]
     raw = raw.reset_index(drop=True)
 
-    # time: MJD (UTC, topocentric) -> BJD_TDB at the source position
     coord = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
     t = Time(raw["MJD"].to_numpy(float), format="mjd", scale="utc", location=CATALINA)
     bjd_tdb = (t.tdb + t.light_travel_time(coord, kind="barycentric")).jd
 
-    # flux: approximate-V (Vega) mag -> uJy
     mag = raw["Mag"].to_numpy(float)
     magerr = raw["Magerr"].to_numpy(float)
     flux = 10 ** ((V_ZP_UJY - mag) / 2.5)
-    flux_err = flux * magerr / 1.0857                               # 1.0857 = 2.5/ln(10)
+    flux_err = flux * magerr / 1.0857                              
 
     out = pd.DataFrame({
         "BJD":             bjd_tdb,

@@ -8,12 +8,9 @@ import time as _time
 
 _COLS = ["BJD", "Target_flux", "Target_flux_err", "Filter"]
 
-# Siding Spring Observatory, NSW, Australia (1.35 m SkyMapper). Single site;
-# topocentric term is sub-21 ms, negligible vs SkyMapper's ~100 s exposures.
 SIDING_SPRING = EarthLocation.from_geodetic(
     lon=149.0644 * u.deg, lat=-31.2733 * u.deg, height=1165.0 * u.m)
 
-# SkyMapper ugriz are AB (DR4 ZPs anchored to Gaia XP synthetic photometry).
 AB_ZP_UJY = 23.9
 
 TAP_URL = "https://api.skymapper.nci.org.au/public/tap/"
@@ -43,16 +40,54 @@ def _tap_df(adql, retries=3):
 
 def fetch_skymapper_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
     """
-    SkyMapper Southern Survey DR4 light curve for one source, via VO TAP.
+    --------------------------------------------------------------------------------
+    SkyMapper Southern Survey DR4
+    --------------------------------------------------------------------------------
+    Access & cross-match. VO TAP at the NCI (api.skymapper.nci.org.au/public/tap/).
+    Nearest object in dr4.master within radius_arcsec (default 3 arcsec), via
+    CONTAINS/CIRCLE with DISTANCE() aliased and ORDER BY on the alias (the engine
+    rejects ORDER BY on the raw DISTANCE()). Per-epoch detections then come from
+    dr4.photometry joined to dr4.images on image_id. Southern-hemisphere survey
+    (~ Dec <= +16 deg, some fields to ~+28 deg); northern targets return no_match.
+    Filter label skymapper-<u/v/g/r/i/z>. Detection PSF photometry (mag_psf) from
+    Siding Spring Observatory.
 
-    time   : BJD_TDB (full JD). images.date + 0.5*exp_time = mid-exposure MJD,
-             taken as UTC (topocentric) and barycentric-corrected.
-    flux   : AB micro-Jy = 10**((23.9 - mag_psf)/2.5). g/r/i/z share the AB
-             scale of BlackGEM/ZTF/NSC/ATLAS; u/v are unique blue bands.
-    filter : "skymapper-u/v/g/r/i/z".
+    Time -> BJD_TDB. images.date is the MJD at exposure start (UTC; the IMAGE_ID
+    encodes the UT shutter-open time, DATE is the precise start MJD). The pipeline
+    forms the mid-exposure MJD as date + 0.5*exp_time/86400, using per-image exp_time
+    so Main (100 s) and Shallow (shorter) exposures are both correct. The mid-exposure
+    UTC is treated as topocentric at Siding Spring and converted:
 
-    clean  : flags<4 AND nimaflags<5 (SkyMapper's documented good-detection cut).
-             Southern survey (Dec <~ +16); northern targets return no match.
+        t       = Time(date + 0.5*exp_time/86400, format="mjd", scale="utc", location=SIDING_SPRING)
+        BJD_TDB = (t.tdb + t.light_travel_time(source_coord, kind="barycentric")).jd
+
+    The half-exposure offset is significant (50 s at a 100 s exposure); omitting it
+    would bias every timestamp 50 s early. The observatory choice affects only the
+    sub-21 ms topocentric term.
+
+    Flux -> uJy. mag_psf is the calibrated AB PSF magnitude (DR4 zero-points anchored
+    to Gaia XP synthetic photometry -- a key change versus the APASS-based DR1).
+    Converted via Target_flux[uJy] = 10^((23.9 - mag_psf)/2.5) (ZP 23.9 =
+    2.5*log10(3631e6), the exact AB->uJy zero point) and
+    Target_flux_err = Target_flux * magerr / 1.0857. System "AB", F0 = 3631 Jy.
+    g/r/i/z are cross-comparable with the other AB surveys (modulo small bandpass
+    differences); u/v are unique to SkyMapper.
+
+    Cleaning. Always mag_psf IS NOT NULL (SQL) and magerr > 0 (post-query). With
+    clean=True, per-detection cuts are flags < 4 and nimaflags < 5 -- SkyMapper's
+    documented criteria ("at least one good (flags<4 and nimaflags<5) photometric data
+    point"): flags < 4 = SExtractor saturation bit (value 4) unset ("not saturated"),
+    which also excludes the bespoke high-value flags (scattered light, cosmic rays),
+    keeping only 0-3 (clean / minor neighbour / deblend); nimaflags < 5 (<= 4 flagged
+    pixels) matches the NIMAFLAGS = 4 master-table inclusion threshold. With
+    clean=False, the only requirement is e_mag_psf > 0. Both flag cuts act per-epoch
+    on the photometry table, not the combined master flags; tightening to flags = 0,
+    nimaflags = 0 (the strict DR1 calibrator cut) would yield cleaner but sparser
+    photometry. The count-based nimaflags (not the imaflags type-bitmask) is the
+    column matching the documented threshold. The pipeline deliberately ignores
+    use_in_clipped: that flag marks epochs retained in the master-table sigma-clipped
+    mean, so filtering on it would preferentially discard the deviating epochs
+    (eclipses, outbursts) that carry the variability signal.
     """
     sid = int(source_id)
     def result(status, df=None):
@@ -64,9 +99,6 @@ def fetch_skymapper_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
 
     rdeg = radius_arcsec / 3600.0
     try:
-        # nearest object: select the distance AS an alias and ORDER BY the alias.
-        # (SkyMapper's ADQL engine rejects ORDER BY on the raw DISTANCE() expr,
-        #  which is what your old working code avoided.)
         obj = _tap_df(f"""SELECT TOP 1 m.object_id,
                    DISTANCE(POINT('ICRS', m.raj2000, m.dej2000),
                             POINT('ICRS', {float(ra)}, {float(dec)})) AS angdist
@@ -86,7 +118,7 @@ def fetch_skymapper_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
             WHERE p.object_id = {objid} AND p.mag_psf IS NOT NULL {flag_cut}
             ORDER BY mjd_mid""")
     except Exception as e:
-        return result(f"query_failed: {type(e).__name__}: {e}")   # surfaces the real cause
+        return result(f"query_failed: {type(e).__name__}: {e}")  
 
     if tab is None or len(tab) == 0:
         return result("no_data")
@@ -99,16 +131,14 @@ def fetch_skymapper_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
         return result("filtered_out")
     tab = tab.reset_index(drop=True)
 
-    # time: mid-exposure MJD (UTC, topocentric) -> BJD_TDB at the source
     coord = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
     t = Time(tab["mjd_mid"].to_numpy(float), format="mjd", scale="utc", location=SIDING_SPRING)
     bjd_tdb = (t.tdb + t.light_travel_time(coord, kind="barycentric")).jd
 
-    # flux: AB mag -> uJy
     mag = tab["mag"].to_numpy(float)
     magerr = tab["magerr"].to_numpy(float)
     flux = 10 ** ((AB_ZP_UJY - mag) / 2.5)
-    flux_err = flux * magerr / 1.0857               # 1.0857 = 2.5/ln(10)
+    flux_err = flux * magerr / 1.0857             
 
     out = pd.DataFrame({
         "BJD":             bjd_tdb,

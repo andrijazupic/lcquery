@@ -6,15 +6,11 @@ from astroquery.gaia import Gaia
 
 _COLS = ["BJD", "Target_flux", "Target_flux_err", "Filter"]
 
-# Gaia DR3 epoch-photometry times are Barycentric JD in TCB, offset by this reference.
-_GAIA_BJD_TCB_REF = 2455197.5            # JD(TCB) at 2010-01-01T00:00:00
+_GAIA_BJD_TCB_REF = 2455197.5           
 
-# Gaia EDR3/DR3 AB zero points (Table 5.2 / Riello+2021): mag_AB = ZP - 2.5*log10(flux[e/s]).
 _ZP_AB = {"G": 25.8010446445, "BP": 25.3539555559, "RP": 25.1039837393}
-_C = {b: 10 ** ((23.9 - zp) / 2.5) for b, zp in _ZP_AB.items()}   # uJy per e-/s
+_C = {b: 10 ** ((23.9 - zp) / 2.5) for b, zp in _ZP_AB.items()} 
 
-# The DataLink EPOCH_PHOTOMETRY product is WIDE: one row per transit, separate columns per band
-# (and G's time column is named differently from BP/RP). Candidate names cover version drift.
 _GAIA_WIDE = {
     "G":  {"time": ["g_transit_time", "g_obs_time"],   "flux": ["g_transit_flux", "g_flux"],
            "ferr": ["g_transit_flux_error", "g_flux_error"], "rej": ["variability_flag_g_reject"]},
@@ -75,19 +71,61 @@ def _wide_to_long(df, clean):
             "ferr": pd.to_numeric(df[ecol], errors="coerce") if ecol else np.nan,
             "band": band,
         })
-        if clean and rcol:                                    # drop variability-rejected transits
+        if clean and rcol:                                   
             sub = sub[~_rejected(df[rcol]).to_numpy()]
-        parts.append(sub.dropna(subset=["time", "flux"]))     # per-band gaps -> drop nulls
+        parts.append(sub.dropna(subset=["time", "flux"]))    
     return pd.concat(parts, ignore_index=True) if parts else None
 
 def fetch_gaia_lc(source_id, ra=None, dec=None, bands=None, valid_only=True, clean=True, auth=None):
     """
-    Gaia DR3 epoch photometry for one source (keyed on source_id; ra/dec unused).
-    time   : BJD_TDB  (per-band Gaia time is BJD in TCB -> reconstruct, convert scale TCB->TDB;
-                       already barycentric, so NO light-travel correction is applied).
-    flux   : uJy on the AB scale  (e-/s * AB zero point; AB_mag = 23.9 - 2.5*log10(Target_flux)).
-    filter : "gaia-g"/"gaia-bp"/"gaia-rp".
-    Statuses: no_data (empty product), no_table (no epoch-photometry table), filtered_out, success.
+    --------------------------------------------------------------------------------
+    Gaia DR3  (epoch photometry)
+    --------------------------------------------------------------------------------
+    Access & format. Gaia DR3 epoch photometry via the DataLink service
+    (Gaia.load_data, retrieval_type="EPOCH_PHOTOMETRY", data_structure="INDIVIDUAL",
+    format="votable"), keyed on source_id (ra/dec unused). The product is a wide
+    per-transit table: one row per transit, with separate per-band columns --
+    g_transit_time/g_transit_flux/g_transit_flux_error,
+    bp_obs_time/bp_flux/bp_flux_error, rp_obs_time/rp_flux/rp_flux_error -- plus
+    per-band variability_flag_*_reject flags. The code melts this to long
+    (band, time, flux, ferr), using each band's own time/flux columns. Filter
+    labels: gaia-g, gaia-bp, gaia-rp. Photometry is per-transit (every source is
+    measured at each predicted transit, down to G ~ 21), so it is effectively forced
+    for completeness, though individual transits can be rejected.
+
+    Time -> BJD_TDB. Each band's time column is the barycentric transit time on the
+    TCB scale, stored as an offset: (BJD_TCB - 2455197.5) days, where
+    2455197.5 = JD(TCB) at 2010-01-01T00:00:00. The code reconstructs the full
+    BJD_TCB and converts the scale TCB -> TDB; because the time is already
+    barycentric, no light-travel correction is applied:
+
+        bjd_tcb = 2455197.5 + time
+        BJD_TDB = Time(bjd_tcb, format="jd", scale="tcb").tdb.jd
+
+    The TCB -> TDB step (~20 s at the Gaia epoch) is applied for consistency with the
+    TDB times of the other surveys. The three bands' times genuinely differ by ~30 s
+    within a transit (the source crosses the focal plane), and each is carried
+    through its own band.
+
+    Flux -> uJy. The per-band flux is the instrumental flux in e-/s, converted to uJy
+    on the AB system via the Gaia EDR3/DR3 AB zero-points (Riello et al. 2021):
+    mag_AB = ZP - 2.5*log10(flux[e-/s]) with
+    ZP = {G: 25.8010446445, BP: 25.3539555559, RP: 25.1039837393}. These are the AB
+    zero points, NOT the VEGAMAG ones (the VEGAMAG EDR3 values would be G = 25.6874,
+    BP = 25.3385, RP = 24.7479) -- the labelling is correct. Equivalently
+    Target_flux[uJy] = flux[e-/s] * C_band and Target_flux_err = flux_error * C_band,
+    where C_band = 10^((23.9 - ZP)/2.5) uJy per e-/s. System "AB", F0 = 3631 Jy.
+
+    Cleaning. valid_only=True (sent to the archive as valid_data=True) returns only
+    rows with non-null flux and rejected_by_photometry = False, removing
+    photometry-rejected and null-flux transits before download. With clean=True, the
+    melt additionally drops, per band, transits flagged
+    variability_flag_{g,bp,rp}_reject = True (rejected by DPAC variability processing
+    or carrying negative/unphysical flux), then requires finite, positive flux
+    (flux > 0). Per-band nulls (a transit measured in one band but not another) are
+    dropped per band during the melt. Since rejected_by_photometry and
+    rejected_by_variability are independent processes, filtering both removes all
+    flagged points.
     """
     sid = int(source_id)
     def result(status, df=None):
@@ -113,7 +151,7 @@ def fetch_gaia_lc(source_id, ra=None, dec=None, bands=None, valid_only=True, cle
                 df = tab.to_pandas()
                 df.columns = [str(c).strip().lower() for c in df.columns]
                 if not any(_pick(df, _GAIA_WIDE[b]["flux"]) for b in _GAIA_WIDE):
-                    continue                                  # not the epoch-photometry table
+                    continue                                
                 saw_table = True
                 lp = _wide_to_long(df, clean)
                 if lp is not None and len(lp):
@@ -124,7 +162,7 @@ def fetch_gaia_lc(source_id, ra=None, dec=None, bands=None, valid_only=True, cle
         return result("filtered_out")
 
     d = pd.concat(long_parts, ignore_index=True)
-    if bands:                                                 # optional band subset
+    if bands:                                             
         want = {b.upper() for b in ([bands] if isinstance(bands, str) else bands)}
         d = d[d["band"].isin(want)]
     if clean:

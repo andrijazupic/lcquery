@@ -4,9 +4,8 @@ import datetime
 import importlib
 import pandas as pd
 import yaml
-from .surveys.band_reference import SURVEY_REFERENCE, write_band_reference   # <-- added
-# survey -> (module under lcquery.surveys, fetcher name). Loaded lazily so a missing
-# optional dependency disables only that survey instead of breaking `import lcquery`.
+from .surveys.band_reference import SURVEY_REFERENCE, write_band_reference  
+
 _FETCHERS = {
     "BlackGEM": ("blackgem", "fetch_blackgem_lc"), "TESS": ("tess", "fetch_tess_lc"),
     "K2": ("k2", "fetch_k2_lc"), "ZTF": ("ztf", "fetch_ztf_lc"),
@@ -25,7 +24,7 @@ DEFAULT_CONFIG = {
 def _get_fetcher(name):
     mod, func = _FETCHERS[name]
     return getattr(importlib.import_module(f"{__package__}.surveys.{mod}"), func)
-def _flux_system(survey_name):                                               # <-- added
+def _flux_system(survey_name):                                              
     """Survey-level photometric system for the flux columns: 'AB' / 'Vega',
     'mixed' for surveys whose bands differ (ASAS-SN), or 'unknown' if unaudited.
     Per-band detail (zero point, bandpass, etc.) lives in band_reference.csv."""
@@ -40,7 +39,7 @@ def load_config(config=None):
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         for cand in ("config.yaml",                                    
                      os.path.join(repo_root, "config.yaml"),           
-                     os.path.join(repo_root, "config.example.yaml")):  # committed template for clones
+                     os.path.join(repo_root, "config.example.yaml")): 
             if os.path.exists(cand):
                 config = cand
                 break
@@ -75,7 +74,7 @@ def update_master_metadata(meta_dict, meta_file):
     df_new = pd.DataFrame([meta_dict])
     if os.path.exists(meta_file):
         df = pd.read_csv(meta_file)
-        df["source_id"] = df["source_id"].astype("int64")     # keep Gaia IDs exact, never float
+        df["source_id"] = df["source_id"].astype("int64")    
         mask = ((df["source_id"] == int(meta_dict["source_id"])) & (df["survey"] == meta_dict["survey"]))
         df_combined = pd.concat([df[~mask], df_new], ignore_index=True)
     else:
@@ -83,6 +82,48 @@ def update_master_metadata(meta_dict, meta_file):
     df_combined.to_csv(meta_file, index=False)
 def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
                         overwrite=None, base_dir=None, verbose=True):
+    """
+    ================================================================================
+    lcquery -- MULTI-SURVEY LIGHT-CURVE STANDARDISATION REFERENCE
+    ================================================================================
+
+    Every survey fetcher returns a light curve standardised to one schema:
+
+        columns : [BJD, Target_flux, Target_flux_err, Filter]
+        TIME    : BJD_TDB -- full Barycentric Julian Date on the Barycentric
+                Dynamical Time scale (a full JD, not a reduced/offset value).
+        FLUX    : micro-Janskys (uJy). A flux density, not a magnitude.
+        FILTER  : lowercase "survey-band" label (e.g. ztf-g, atlas-o, gaia-bp).
+
+    TIME standardisation, by the survey's native time frame
+    - Topocentric (observer) UTC  -> add the barycentric light-travel time
+            (and shift to exposure mid-point where the raw stamp is the start).
+    - Heliocentric (HJD)          -> undo the heliocentric light-travel time
+            (recovering topocentric UTC), then add the barycentric one.
+    - Already barycentric          -> scale-convert only (TCB->TDB, or pass TDB);
+            (space missions)            no light-travel term is applied.
+    The topocentric-vs-geocentric approximation is bounded by Earth's radius:
+    R_earth / c ~ 21 ms, negligible for any period of interest.
+
+    FLUX standardisation
+    - AB surveys:   flux[uJy] = 10^((23.90 - mag)/2.5), where
+            23.90 = 2.5*log10(3631e6) and 3631 Jy is the AB zero-point flux.
+            Native-uJy surveys (ATLAS, BlackGEM) are taken directly.
+    - Vega surveys: flux[uJy] = 10^((ZP - mag)/2.5), with a band-specific Vega
+            zero-point flux F0 (Johnson V 3636 Jy, Cousins I 2416 Jy, Kepler
+            3241.90 Jy, TESS.Red 2631.88 Jy, ASAS-SN V 3836.3 Jy).
+    A constant zero-point scale never affects variability or period detection; it
+    matters only for absolute or cross-band photometry. Negative fluxes from
+    forced photometry are KEPT -- clipping them biases the noise floor (Eddington
+    bias) and corrupts Fourier-based period searches on faint sources.
+
+    PHOTOMETRY TYPE matters for completeness
+    - FORCED photometry measures flux at a fixed position every epoch, so a source
+            stays in the light curve through a deep eclipse (no drop-outs). Negative
+            values are expected when the source is faint and the sky fluctuates low.
+    - DETECTION photometry only records a source when it is extracted above a
+            per-image threshold, so deep eclipses can produce MISSING epochs.
+    """
     cfg = load_config(config)
     out_cfg  = cfg.get("output", {}) or {}
     defaults = cfg.get("defaults", {}) or {}
@@ -93,7 +134,7 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
     write_hdr = out_cfg.get("write_header_comments", False)
     meta_file = os.path.join(base_dir, "query_metadata.csv")
     os.makedirs(base_dir, exist_ok=True)
-    write_band_reference(os.path.join(base_dir, "band_reference.csv"))       # <-- added: self-describing per-band dictionary
+    write_band_reference(os.path.join(base_dir, "band_reference.csv"))     
     if verbose:
         print(f"\n--- Processing Source ID: {source_id} ---")
     for survey_name in _FETCHERS:
@@ -128,7 +169,7 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
             if not df.empty:
                 hdr = None
                 if write_hdr:
-                    flux_sys = _flux_system(survey_name)                     # <-- changed
+                    flux_sys = _flux_system(survey_name)                
                     hdr = [f"survey={survey_name}", f"source_id={source_id}", f"ra={ra} dec={dec}",
                            f"params={kwargs}",
                            f"columns: BJD=BJD_TDB(JD), Target_flux=uJy({flux_sys}), Target_flux_err=uJy({flux_sys}), Filter=band; per-band systems in band_reference.csv"]
@@ -142,7 +183,7 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
             "source_id": int(source_id), "ra": ra, "dec": dec, "survey": survey_name,
             "observations": n, "status": status, "clean": kwargs.get("clean"),
             "radius": radius, "radius_unit": runit, "time_unit": "BJD_TDB", 
-            "flux_unit": f"uJy_{_flux_system(survey_name)}",                  # <-- changed
+            "flux_unit": f"uJy_{_flux_system(survey_name)}",                 
             "queried_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         }, meta_file)
     if verbose:

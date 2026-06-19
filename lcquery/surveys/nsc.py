@@ -6,7 +6,6 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord, EarthLocation
 from astropy.time import Time
 
-# The astro-datalab package is required
 try:
     from dl import queryClient as qc
 except ImportError:
@@ -14,16 +13,12 @@ except ImportError:
 
 _COLS = ["BJD", "Target_flux", "Target_flux_err", "Filter"]
 
-# --- Observatories ---
-# CTIO: Cerro Tololo Inter-American Observatory (Chile) - DECam
 CTIO = EarthLocation.from_geodetic(
     lon=-70.8065 * u.deg, lat=-30.1690 * u.deg, height=2207.0 * u.m)
 
-# KPNO: Kitt Peak National Observatory (Arizona) - Mosaic3 / 90Prime
 KPNO = EarthLocation.from_geodetic(
     lon=-111.5997 * u.deg, lat=31.9633 * u.deg, height=2097.0 * u.m)
 
-# NSC DR2 is AB calibrated.
 AB_ZP_UJY = 23.9
 
 _MAG_MAP = {
@@ -42,7 +37,6 @@ def _run_nsc_query(sql, retries=3):
     for attempt in range(retries):
         try:
             res = qc.query(sql=sql, fmt="csv")
-            # qc.query returns a string; if it fails, it usually returns an "ERROR" string
             if res and isinstance(res, str) and not res.startswith("ERROR"):
                 return pd.read_csv(io.StringIO(res))
         except Exception:
@@ -55,8 +49,49 @@ def _run_nsc_query(sql, retries=3):
 
 def fetch_nsc_lc(source_id, ra, dec, radius_arcsec=2.0, mag_choice="auto", band=None, clean=True, schema="nsc_dr2"):
     """
-    Fetch NOIRLab Source Catalog (NSC DR2) light curves, separate observatories 
-    for precise BJD_TDB timing, convert AB magnitudes to uJy, and return the DataFrame.
+    --------------------------------------------------------------------------------
+    NSC DR2  (NOIRLab Source Catalog DR2)
+    --------------------------------------------------------------------------------
+    Access. NOIRLab Source Catalog DR2 via the Astro Data Lab query client
+    (dl.queryClient, ADQL on nsc_dr2.object, nsc_dr2.meas, nsc_dr2.exposure). A q3c
+    cone search on object returns the nearest object id; meas (joined to exposure)
+    then gives the per-measurement time series. Magnitude option is selectable (auto
+    default, or fixed apertures aper1-aper8; a fixed aperture is often cleaner for
+    time-series on point sources). Filter label is nsc-<filter> over u/g/r/i/z/Y/VR
+    (lowercased -> nsc-u/g/r/i/z/y/vr). Detection SExtractor aperture photometry
+    (mag_auto) on individual chip images.
+
+    Time -> BJD_TDB. meas.mjd is the per-exposure topocentric UTC observation time
+    (shutter-open / exposure start; verified against the exposure dateobs). Because
+    NSC DR2 combines three instruments at two sites, the barycentric correction is
+    applied per observatory, keyed on the exposure-table instrument field: k4m
+    (Mayall + Mosaic3) and ksb (Bok + 90Prime), both on Kitt Peak, use the KPNO
+    location; c4d (Blanco + DECam) uses CTIO. Each subset is then converted UTC -> TDB
+    with the barycentric light-travel time to the source:
+
+        t       = Time(mjd, format="mjd", scale="utc", location=<KPNO or CTIO>)
+        BJD_TDB = (t.tdb + t.light_travel_time(source_coord, kind="barycentric")).jd
+
+    (Splitting on instrument rather than parsing the exposure name avoids
+    mis-assignment, since DECam names appear in multiple formats, e.g. c4d_... and
+    tu....) The site choice enters only at the ~tens-of-ms level. meas.mjd is the
+    exposure start, so the pipeline adds 0.5*exptime -- taken per-exposure from the
+    joined exposure table, since NSC's exposure times vary across its constituent
+    surveys -- to place the timestamp at mid-exposure, matching the convention used for
+    the other surveys.
+
+    Flux -> uJy. NSC DR2 magnitudes are AB (zero-points tied to Pan-STARRS1,
+    ATLAS-Refcat2, SkyMapper DR1, and r+Gaia-G for VR). Converted via
+    Target_flux[uJy] = 10^((23.9 - mag)/2.5) and
+    Target_flux_err = Target_flux * 0.921034 * magerr (= flux * magerr / 1.0857). The
+    chosen magnitude (mag_auto default) is SExtractor aperture photometry; VR is an
+    approximately-AB hybrid band. System "AB", F0 = 3631 Jy.
+
+    Cleaning. The SQL enforces mag IS NOT NULL and magerr > 0 always (the latter even
+    when clean=False, protecting error propagation); with clean=True it additionally
+    requires flags = 0 (SExtractor FLAGS clean -- no neighbour/blend/saturation/
+    truncation). A post-query dropna removes residual nulls. An optional band argument
+    restricts to one filter.
     """
     sid = int(source_id)
     empty_out = pd.DataFrame(columns=_COLS)
@@ -70,7 +105,6 @@ def fetch_nsc_lc(source_id, ra, dec, radius_arcsec=2.0, mag_choice="auto", band=
     
     mag_col, emag_col = _MAG_MAP[mag_choice]
 
-    # 1. Spatial Crossmatch (Confirmed Postgres LIMIT 1)
     rdeg = radius_arcsec / 3600.0
     sql_obj = f"""
         SELECT o.id
@@ -88,10 +122,8 @@ def fetch_nsc_lc(source_id, ra, dec, radius_arcsec=2.0, mag_choice="auto", band=
         
     objectid = str(df_obj.iloc[0, 0])
 
-    # 2. Fetch the time-series measurements
     band_cut = f"AND m.filter = '{band}'" if band else ""
     
-    # CRITICAL: Always enforce emag > 0 to protect error propagation, even if clean=False
     qual_cut = f"AND m.flags = 0 AND m.{emag_col} > 0" if clean else f"AND m.{emag_col} > 0"
     
     sql_meas = f"""
@@ -116,19 +148,14 @@ def fetch_nsc_lc(source_id, ra, dec, radius_arcsec=2.0, mag_choice="auto", band=
     if len(raw) == 0:
         return result("filtered_out")
 
-    # 3. Dynamic Time Standardization (The CTIO vs KPNO split)
     bjd_tdb = np.zeros(len(raw))
     coord = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
 
-    # m.mjd is the exposure START. Add 0.5*exptime per row (NSC exposure times vary
-    # across DECam / Mosaic3 / 90Prime) to place the timestamp at mid-exposure,
-    # matching the convention used for the other surveys.
     raw["mjd_mid"] = raw["mjd"].astype(float) + 0.5 * raw["exptime"].astype(float) / 86400.0
     
     kpno_mask = raw["instrument"].isin(["k4m", "ksb"])
     ctio_mask = ~kpno_mask
 
-    # Calculate precise barycentric times based on which hemisphere took the image
     if kpno_mask.any():
         t_kpno = Time(raw.loc[kpno_mask, "mjd_mid"].to_numpy(float), format="mjd", scale="utc", location=KPNO)
         bjd_tdb[kpno_mask] = (t_kpno.tdb + t_kpno.light_travel_time(coord, kind="barycentric")).jd
@@ -137,14 +164,12 @@ def fetch_nsc_lc(source_id, ra, dec, radius_arcsec=2.0, mag_choice="auto", band=
         t_ctio = Time(raw.loc[ctio_mask, "mjd_mid"].to_numpy(float), format="mjd", scale="utc", location=CTIO)
         bjd_tdb[ctio_mask] = (t_ctio.tdb + t_ctio.light_travel_time(coord, kind="barycentric")).jd
 
-    # 4. Flux Standardization: AB Magnitude to microJanskys (uJy)
     mag = raw["mag"].to_numpy(float)
     magerr = raw["magerr"].to_numpy(float)
     
     flux_ujy = 10 ** ((AB_ZP_UJY - mag) / 2.5)
     flux_err_ujy = flux_ujy * 0.921034 * magerr
 
-    # 5. Build final DataFrame
     filter_array = ("nsc-" + raw["filter"].astype(str).str.lower()).to_numpy()
 
     out = pd.DataFrame({

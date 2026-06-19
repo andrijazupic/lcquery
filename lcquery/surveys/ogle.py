@@ -12,15 +12,11 @@ from astropy.time import Time
 
 _COLS = ["BJD", "Target_flux", "Target_flux_err", "Filter"]
 
-# Las Campanas Observatory, Chile (1.3 m Warsaw Telescope). Single site; <21 ms topocentric.
 LCO = EarthLocation.from_geodetic(
     lon=-70.7003 * u.deg, lat=-29.0083 * u.deg, height=2380.0 * u.m)
 
-# OGLE = standard Johnson V / Cousins I (Vega). uJy = 10**((ZP - mag)/2.5):
-#   V (Johnson, ~3636 Jy) -> 23.90 (~=AB);  I (Cousins, ~2416 Jy) -> 23.46
 _ZP = {"I": 23.4585, "V": 23.9015}
 
-# Roots of the OGLE Collection of Variable Stars - every class lives under these.
 OCVS_ROOTS = [
     "https://ftp.astrouw.edu.pl/ogle/ogle4/OCVS/",
     "https://ftp.astrouw.edu.pl/ogle/ogle3/OIII-CVS/",
@@ -39,7 +35,6 @@ def _http():
         _HTTP = s
     return _HTTP
 
-# id, then RA (h:m:s OR h m s), then signed Dec - handles colon- AND space-delimited idents
 _ROW_RE = re.compile(
     r"^\s*(?P<sid>OGLE\S+)\b.*?"
     r"(?P<rah>\d{1,2})[:\s](?P<ram>[0-5]\d)[:\s](?P<ras>\d{1,2}(?:\.\d+)?)\s+"
@@ -75,10 +70,10 @@ def _discover_catalogs(roots, maxdepth=4, verbose=True):
         idents = [f for f in files if re.match(r"ident.*\.dat$", f, re.I)]
         if idents:
             found.append((url, idents[0]))
-            continue                                   # catalogue leaf; don't enter phot/
+            continue                                  
         if depth < maxdepth:
             for d in subdirs:
-                if d.lower().startswith("phot"):        # skip per-star photometry trees
+                if d.lower().startswith("phot"):      
                     continue
                 stack.append((url + d, depth + 1))
         _time.sleep(0.05)
@@ -169,7 +164,7 @@ def _fetch_phot(cat_dir, star_id):
         except Exception:
             continue
         for b in bands:
-            band = b.rstrip("/").split("_")[0].upper()   # "I"/"V" from "I/", "I_o4/"
+            band = b.rstrip("/").split("_")[0].upper()  
             if band not in ("I", "V"):
                 continue
             url = cat_dir + pdir + b + star_id + ".dat"
@@ -186,13 +181,65 @@ def _fetch_phot(cat_dir, star_id):
 
 def fetch_ogle_lc(source_id, ra, dec, radius_arcsec=2.0, clean=True):
     """
-    OGLE light curve for one source by cross-matching (ra,dec) against the WHOLE OGLE
-    Collection of Variable Stars (every class), then pulling its photometry.
-    OGLE has light curves only for catalogued variables; non-variables -> no_match.
+    --------------------------------------------------------------------------------
+    OGLE  (OGLE-III / OGLE-IV Collection of Variable Stars, OCVS)
+    --------------------------------------------------------------------------------
+    Access & scope. Crawls the OGLE Collection of Variable Stars (OCVS) across the
+    OGLE-III (OIII-CVS) and OGLE-IV (ogle4/OCVS) FTP trees, parsing every ident*.dat
+    into a cached master table of (star_id, RA, Dec, catalog_dir). The target
+    (RA, Dec) is matched to the nearest OCVS variable within radius_arcsec (default
+    2 arcsec); the matched star's phot/I/<id>.dat and phot/V/<id>.dat are fetched.
+    Coverage is variable-only -- OGLE serves OCVS light curves only for catalogued
+    variables, so a target it observed but never classified returns no_match. Filter
+    label is ogle-i / ogle-v. Photometry is PSF / Difference Image Analysis (DIA) from
+    the 1.3 m Warsaw Telescope at Las Campanas. The pipeline fetches from every phot*
+    subdirectory a catalogue provides, concatenating multi-phase photometry (e.g.
+    phot_ogle2/ = OGLE-II 1997-2000, phot/ = OGLE-IV) into one light curve -- all from
+    the same telescope, all HJD-2450000, all standard I/V, so time and flux conversion
+    is uniform across phases and only a negligible inter-phase zero-point offset
+    (~0.01-0.02 mag) is introduced.
 
-    time   : BJD_TDB (per-star HJD -> undo heliocentric LTT -> barycentric+TDB at LCO).
-    flux   : physical uJy - I (Cousins): 10**((23.46 - I)/2.5); V (Johnson): 10**((23.90 - V)/2.5).
-    filter : "ogle-i" / "ogle-v".
+    Time -> BJD_TDB. The phot files store time as HJD - 2450000 (Heliocentric Julian
+    Date, reduced; UTC-based), confirmed against the OCVS format spec. _parse_phot
+    reconstructs full HJD (t + 2450000 for reduced values, pass-through for full
+    JD > 2.4e6). Because the time is heliocentric, conversion is a two-step round
+    trip:
+
+        t0      = Time(HJD, format="jd", scale="utc", location=LCO)
+        t_topo  = t0 - t0.light_travel_time(coord, kind="heliocentric")  # undo helio -> topo UTC
+        BJD_TDB = (t_topo.tdb + t_topo.light_travel_time(coord, kind="barycentric")).jd
+
+    It removes the heliocentric light-travel correction OGLE applied (recovering the
+    topocentric UTC observation time at the 1.3 m Warsaw Telescope), then re-applies
+    the barycentric correction with the UTC -> TDB scale shift. The HJD<->BJD
+    difference is up to +/-4 s and varies annually, so the round trip -- not a constant
+    offset -- is what produces a correct BJD_TDB. Residuals are all negligible: site
+    choice < 21 ms (single site); light-travel time evaluated at the HJD epoch versus
+    the true epoch costs << 1 ms; and the UTC-timescale assumption (OGLE doesn't state
+    TT) would at worst add a ~constant ~69 s shift, invisible to an hour-to-day period
+    search.
+
+    Flux -> uJy. OGLE magnitudes are standard Johnson V / Cousins I (calibrated to
+    standard stars; the OGLE-IV I filter closely reproduces the standard system).
+    Converted to Vega-system flux density via Target_flux[uJy] = 10^((ZP - mag)/2.5),
+    with ZP_V = 23.9015 (Johnson V Vega, 3636 Jy ~ AB) and ZP_I = 23.4585 (Cousins I
+    Vega, 2416 Jy -- the standard Bessell value; an alternative ~2550 Jy convention
+    exists but differs only by a constant scale). Errors:
+    Target_flux_err = Target_flux * magerr / 1.0857 (linearised mag->flux propagation,
+    = flux * 0.921 * magerr). The output is a Vega in-band flux density, not AB; since
+    OGLE I/V are unique bandpasses never co-fitted with other surveys' fluxes, the
+    exact zero point only sets a constant scale and is irrelevant to period detection.
+    Per-band overrides: ogle-i {Vega, 2416 Jy, Cousins I},
+    ogle-v {Vega, 3636 Jy, Johnson V}.
+
+    Cleaning. The phot files carry no quality flag (three columns only: HJD, mag,
+    magerr), so quality control is range-based. _parse_phot coerces to numeric and
+    drops non-numeric/NaN rows; after concatenation, drop_duplicates(["hjd","band"])
+    removes repeated epochs from overlapping fields. With clean=True the cuts are
+    magerr > 0, magerr < 1.0, and 5 < mag < 25 -- loose sanity bounds that strip
+    garbage and any sentinel/failed points (which lie outside these ranges) while
+    preserving real variability. A final dropna(["hjd","mag","magerr"]) guards the
+    output.
     """
     sid = int(source_id)
     def result(status, df=None):
@@ -207,8 +254,6 @@ def fetch_ogle_lc(source_id, ra, dec, radius_arcsec=2.0, clean=True):
         return result("catalog_unavailable")
     target = SkyCoord(float(ra)*u.deg, float(dec)*u.deg, frame="icrs")
     idx, sep2d, _ = target.match_to_catalog_sky(coord)
-    # astropy returns sep2d as a shape-(1,) Angle even for a scalar target, and
-    # numpy 2.x refuses float() on a size-1 non-0-d array - ravel before scalarizing.
     if float(np.ravel(sep2d.arcsec)[0]) > radius_arcsec:
         return result("no_match")
     row = df.iloc[int(np.ravel(np.asarray(idx))[0])]

@@ -10,7 +10,7 @@ Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries 
 
 | Survey | Filter labels | System | Photometry | Queried by |
 |---|---|---|---|---|
-| BlackGEM | `blackgem-u/g/q/r/i/z` | AB | detection (optimal) | Gaia DR3 ID |
+| BlackGEM | `blackgem-u/g/q/r/i/z` | AB | forced (optimal) | Gaia DR3 ID |
 | TESS | `tess-spoc-20/120/200/600/1800` † | **Vega** | forced (PDCSAP) | position (cone) |
 | K2 | `k2-60/1800` † | **Vega** | forced (PDCSAP) | position (cone) |
 | ZTF | `ztf-g/r/i` | AB | detection (PSF, matchfile) | position (cone) |
@@ -43,7 +43,7 @@ Every timestamp is converted to **Barycentric Julian Date on the TDB scale** (fu
 - **Already barycentric** — Gaia (TCB transit time), K2 (BKJD), TESS (BTJD). No light-travel
   correction is applied; only the time scale is put onto TDB (a ~20 s shift for Gaia's TCB).
 
-Where a survey reports the **exposure start** and the exposure length is known, the pipeline adds half the exposure to place the timestamp at **mid-exposure**, matching the rest of the pipeline (ATLAS, NSC, SkyMapper, ZTF; BlackGEM is already mid-exposure via GPS timing). NSC's exposure time is read per-row, since it varies across its constituent surveys.
+Where a survey reports the **exposure start** and the exposure length is known, the pipeline adds half the exposure to place the timestamp at **mid-exposure**, matching the rest of the pipeline (NSC, SkyMapper, ZTF; ATLAS and BlackGEM are already at mid-exposure natively, so no offset is added — ATLAS reports the exposure-midpoint MJD, and BlackGEM derives its midpoint from GPS shutter timing). NSC's exposure time is read per-row, since it varies across its constituent surveys.
 
 Absolute-timing floors worth knowing: **ASAS-SN's field-centre HJD is good only to ~200 s** unless recomputed with its aperture pipeline, and **CRTS / J-VAR carry a start-vs-mid ambiguity of order 10–60 s**. The per-survey timing convention is recorded in `band_reference.csv`.
 
@@ -55,10 +55,10 @@ Two photometric systems are in play:
 
 - **AB** — BlackGEM, Gaia, ZTF, NSC, ATLAS, SkyMapper, J-VAR, and ASAS-SN `g`.
 - **Vega** — CRTS, OGLE, TESS, K2, and ASAS-SN `v`, each with a band-specific zero point
-  (Kepler 3241.90 Jy, TESS 2631.88 Jy, Cousins-I 2416 Jy, Johnson-V 3636 Jy; exact values in
+  (Kepler 3241.90 Jy, TESS 2631.88 Jy, Cousins-I 2416 Jy, Johnson-V 3636 Jy, ASAS-SN V 3836.3 Jy; exact values in
   `band_reference.csv`).
 
-**Negative and low-significance fluxes are kept on purpose.** The forced-photometry surveys (ATLAS, TESS, K2, ASAS-SN) retain faint and slightly-negative measurements with their error bars rather than clipping at `flux > 0`, because discarding them would bias the noise floor that SNR-based period searches depend on. Expect negative points in faint light curves since they are valid measurements, not errors.
+**Negative and low-significance fluxes are kept on purpose.** The forced-photometry surveys (ATLAS, BlackGEM, TESS, K2, ASAS-SN) retain faint and slightly-negative measurements with their error bars rather than clipping at `flux > 0`, because discarding them would bias the noise floor that SNR-based period searches depend on. Expect negative points in faint light curves since they are valid measurements, not errors.
 
 ## Data cleaning
 
@@ -136,7 +136,7 @@ lightcurves/
 ```
 
 **Light-curve CSVs.** Each has four columns — `BJD`, `Target_flux`, `Target_flux_err`,
-`Filter` — preceded by a optional commented `#` header (see Configuration) recording the survey, `source_id`, coordinates, and column units. Read them back with `comment="#"`:
+`Filter` — preceded by an optional commented `#` header (see Configuration) recording the survey, `source_id`, coordinates, and column units. Read them back with `comment="#"`:
 
 ```python
 import pandas as pd

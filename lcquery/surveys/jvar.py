@@ -8,14 +8,12 @@ import time as _time
 
 _COLS = ["BJD", "Target_flux", "Target_flux_err", "Filter"]
 
-# Observatorio Astrofisico de Javalambre (OAJ), Teruel, Spain (JAST80/T80).
 OAJ = EarthLocation.from_geodetic(
     lon=-1.0163 * u.deg, lat=40.0420 * u.deg, height=1957.0 * u.m)
 
 AB_ZP_UJY = 23.9                                  # J-VAR mags are AB (Oke & Gunn 1983)
 _MISSING = (99.0, 99.000)
 
-# broad g/r/i -> short labels (group with other surveys); narrow bands kept distinct
 _JVAR_BANDS = {"GSDSS": "jvar-g", "RSDSS": "jvar-r", "ISDSS": "jvar-i",
                "J0395": "jvar-j0395", "J0515": "jvar-j0515",
                "J0660": "jvar-j0660", "J0861": "jvar-j0861"}
@@ -56,13 +54,49 @@ def _to_array(x, as_int=False):
 
 def fetch_jvar_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
     """
-    J-VAR DR1 (JAST80, Javalambre) light curve for one source, via VO Cone Search.
+    --------------------------------------------------------------------------------
+    J-VAR DR1  (Javalambre VARiability survey)
+    --------------------------------------------------------------------------------
+    Access & format. J-VAR DR1 light curves via the CEFCA VO Cone Search (SCSService
+    on JVAR.LIGHT_CURVES), by position. The service returns one row per
+    (object, filter) with array-valued MJD/MAG/MAG_ERR/FLAGS columns (one entry per
+    epoch), which the code explodes into per-epoch rows. If the cone catches more
+    than one OBJ_ID, the nearest to the input position is kept. Filter labels come
+    from FILTER (uppercased) via _JVAR_BANDS: jvar-g/jvar-r/jvar-i for the SDSS broad
+    bands and jvar-j0395/j0515/j0660/j0861 for the narrow bands (exactly seven of the
+    twelve J-PLUS filters). Detection aperture photometry from the JAST80 telescope
+    at the Observatorio Astrofisico de Javalambre (OAJ); >= 11 epochs per field,
+    three images per filter per visit.
 
-    time   : BJD_TDB (full JD). mjd is per-image UTC (topocentric), barycentric-
-             corrected at the source position. flux: AB micro-Jy. filter: jvar-*.
+    Time -> BJD_TDB. The per-epoch MJD is the per-image observation time on the UTC
+    scale, topocentric (the CEFCA/jype pipeline records the observation-frame MJD; no
+    barycentric correction is pre-applied). The code treats it as topocentric UTC at
+    the OAJ, scale-converts to TDB, and adds the barycentric light-travel time to the
+    source:
 
-    clean=True  -> flag == 0   (pristine; J-VAR's strict variability-index cut)
-    clean=False -> flag < 1024 (J-VAR's documented light-curve "valid" cut)
+        t       = Time(MJD, format="mjd", scale="utc", location=OAJ)
+        BJD_TDB = (t.tdb + t.light_travel_time(source_coord, kind="barycentric")).jd
+
+    The OAJ site enters only at the sub-millisecond level; a <= tens-of-seconds
+    start-vs-midpoint ambiguity on the per-image MJD is negligible for the periods of
+    interest.
+
+    Flux -> uJy. J-VAR DR1 magnitudes are on the AB system (Oke & Gunn 1983),
+    produced by ensemble differential photometry calibrated to J-PLUS DR3. They are
+    converted via Target_flux[uJy] = 10^((23.9 - MAG)/2.5) and
+    Target_flux_err = Target_flux * MAG_ERR / 1.0857. Missing/invalid magnitudes
+    (sentinel 99.0) are set to NaN and dropped. System "AB", F0 = 3631 Jy.
+
+    Cleaning. The FLAGS column is a summed bitmask: SExtractor native flags (1-128)
+    plus CEFCA additions -- 256 (strict saturation, peak > 50000 ADU), 512 (FWHM
+    exceeds the proximity limit; blending), 1024 (cross-matched but invalid
+    photometry), 2048 (no cross-match within 1.1 arcsec; not detected). Always: drop
+    NaN in mjd/mag/magerr and require magerr > 0. Then, matching the J-VAR DR1 paper's
+    own definitions: clean=True keeps flag == 0 (the paper's "no issues" cut, used
+    for strict variability indices); clean=False keeps flag < 1024 (the paper's
+    documented "valid" cut -- a real, useful measurement, excluding invalid photometry
+    and non-detections while tolerating SExtractor flags, saturation, and proximity
+    warnings).
     """
     sid = int(source_id)
     def result(status, df=None):
@@ -85,14 +119,12 @@ def fetch_jvar_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
         return result("missing_columns")
     has_flags = "FLAGS" in lc.columns
 
-    # nearest object if the cone caught more than one
     if "OBJ_ID" in lc.columns and lc["OBJ_ID"].nunique() > 1 \
             and {"RA", "DEC"}.issubset(lc.columns):
         sep2 = ((lc["RA"] - float(ra)) * np.cos(np.radians(float(dec)))) ** 2 \
                + (lc["DEC"] - float(dec)) ** 2
         lc = lc[lc["OBJ_ID"] == lc.loc[sep2.idxmin(), "OBJ_ID"]]
 
-    # explode the per-filter arrays (mjd/mag/magerr [+flags]) into per-epoch rows
     parts = []
     for _, row in lc.iterrows():
         mjd = _to_array(row["MJD"])
@@ -117,12 +149,10 @@ def fetch_jvar_lc(source_id, ra, dec, radius_arcsec=3.0, clean=True):
         return result("filtered_out")
     ph = ph.reset_index(drop=True)
 
-    # time: per-image MJD (UTC) -> BJD_TDB at the source
     coord = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
     t = Time(ph["mjd"].to_numpy(float), format="mjd", scale="utc", location=OAJ)
     bjd_tdb = (t.tdb + t.light_travel_time(coord, kind="barycentric")).jd
 
-    # flux: AB mag -> uJy
     mag = ph["mag"].to_numpy(float)
     magerr = ph["magerr"].to_numpy(float)
     flux = 10 ** ((AB_ZP_UJY - mag) / 2.5)

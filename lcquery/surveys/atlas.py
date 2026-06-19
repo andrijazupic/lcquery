@@ -20,7 +20,6 @@ _HOST = "https://fallingstar-data.com"
 ATLAS_SITE = EarthLocation.from_geodetic(
     lon=-156.2568 * u.deg, lat=20.7067 * u.deg, height=3055.0 * u.m)
 
-EXPTIME_DAYS = 30.0 / 86400.0
 ATLAS_FILTERS = {"c": "atlas-c", "o": "atlas-o"}
 _CLEAN_COLS = ["x", "y", "maj", "min", "apfit", "mag5sig", "Sky"]
 
@@ -69,7 +68,7 @@ def _queue_job(session, ra, dec, headers, mjd_min, use_reduced, max_retries=6):
         try:
             resp = session.post(f"{BASEURL}/queue/", headers=headers, data=data, timeout=30)
         except Exception:
-            return None                     # connection failure on POST -> bail (no duplicate)
+            return None                    
         if resp.status_code == 201:
             return _abs(resp.json().get("url"))
         if resp.status_code == 429:
@@ -98,7 +97,7 @@ def _poll_result(session, task_url, headers, max_wait_s, poll_every_s):
                 _time.sleep(5)
                 continue
             data = resp.json()
-        except Exception:                   # transient drop the adapter couldn't absorb
+        except Exception:                  
             fails += 1
             if fails > 8:
                 return "error", None
@@ -132,10 +131,61 @@ def fetch_atlas_lc(source_id, ra, dec, token=None,
                    mjd_min=57000.0, use_reduced=True,
                    clean=True, cleanup=True, max_wait_s=9999, poll_every_s=3):
     """
-    ATLAS forced-photometry light curve for one source (cyan/orange).
-    time: BJD_TDB (exposure START +15 s -> mid, then barycentric).
-    flux: micro-Jy direct from AB uJy/duJy. filter: atlas-c/atlas-o.
-    mjd_min default 57000.0 = full history (omitting it -> server returns ~30 days only).
+    --------------------------------------------------------------------------------
+    ATLAS  (Asteroid Terrestrial-impact Last Alert System, forced photometry)
+    --------------------------------------------------------------------------------
+    Access. ATLAS Forced Photometry Server (fallingstar-data.com/forcedphot) -- a job
+    is queued for the exact (ra, dec); use_reduced=True runs tphot (PSF-fitting
+    photometry; Tonry 2011, Sonnett et al. 2013) on the reduced (non-difference)
+    images, returning total flux. mjd_min defaults to 57000 (full history; omitting
+    it returns only ~30 days). Filters: c (cyan, ~420-650 nm) -> atlas-c, o (orange,
+    ~560-820 nm) -> atlas-o. ATLAS is a quadruple 0.5 m system: Haleakala and Mauna
+    Loa (Hawaii), El Sauce (Chile), Sutherland (South Africa); 30 s exposures, ~4 per
+    field over an hour, calibrated to Refcat2 (Pan-STARRS/Gaia) on the AB system.
+    This is FORCED photometry -- a flux is measured at the input position on every
+    exposure, so the light curve is eclipse-complete (faint epochs give low or
+    slightly-negative flux rather than drop-outs).
+
+    Time -> BJD_TDB. The server reports the exposure MJD on the UTC scale at the
+    observer (topocentric), so no barycentric correction is baked in. The reported
+    MJD is the exposure MID-POINT, not the start: the ATLAS Solar System Catalog
+    README defines "MJD_ob : exposure midpoint time at observer, [MJD-UTC]", and
+    Tonry et al.'s 3I/ATLAS paper states the MJD "is the actual mean time of the
+    exposure". These are the same per-exposure timestamps the forced-photometry
+    server uses, and no ATLAS source describes a "start" convention. The MJD is
+    therefore taken DIRECTLY (no half-exposure offset is added), treated as UTC at
+    Haleakala, scale-converted to TDB, and barycentre-corrected:
+
+        t       = Time(MJD, format="mjd", scale="utc", location=ATLAS_SITE)
+        BJD_TDB = (t.tdb + t.light_travel_time(coord, kind="barycentric")).jd
+
+    (Earlier versions added +15 s on the assumption that MJD was the exposure start;
+    that double-counted the half-exposure and placed ATLAS 15 s late relative to the
+    other surveys. It has been removed.)
+
+    Flux -> uJy. ATLAS provides flux natively in AB micro-Janskys
+    (m_AB = 23.9 - 2.5*log10(uJy)), so Target_flux = uJy and Target_flux_err = duJy
+    are taken directly with no conversion. Because use_reduced=True, these are total
+    (absolute) fluxes, not template-subtracted differences, and are positive for real
+    detections. System "AB", F0 = 3631 Jy.
+
+    Cleaning. Always: drop NaN in MJD/uJy/duJy and require duJy > 0. With clean=True,
+    the standard ATLAS image-quality cuts are applied -- err == 0; on-chip position
+    (100 <= x,y <= 10460, a 100-px edge exclusion); PSF shape sane
+    (1.6 <= maj, min <= 5 pixels, around the ~2-px typical PSF); good aperture fit
+    (-1 <= apfit <= -0.1); deep image (mag5sig > 17); dark sky (Sky > 17); and a
+    loose error cap (duJy < 10000). These are consistent in spirit with the ATClean
+    community recommendations (Rest et al. 2024). With clean=False, only err == 0 and
+    a loose depth cut (mag5sig > 10) are applied. Note these cuts filter on
+    image/measurement quality, not per-point detection significance, so low-SNR and
+    slightly-negative fluxes are retained with their errors for downstream SNR
+    filtering.
+
+    Data-quality caveats (not removed by clean): the difference-imaging reference
+    templates changed around MJD 58417 (2018-10-26) and 58882 (2020-02-03) -- less
+    relevant here since use_reduced=True bypasses difference images, but the
+    reference-catalogue calibration epoch still applies; and in crowded fields the
+    reduced-image flux can include blends.
     """
     sid = int(source_id)
     headers = _get_headers(token)
@@ -206,8 +256,8 @@ def fetch_atlas_lc(source_id, ra, dec, token=None,
     df = df.reset_index(drop=True)
 
     coord = SkyCoord(ra * u.deg, dec * u.deg, frame="icrs")
-    mjd_mid = df["MJD"].to_numpy(float) + EXPTIME_DAYS / 2.0
-    t = Time(mjd_mid, format="mjd", scale="utc", location=ATLAS_SITE)
+    mjd = df["MJD"].to_numpy(float) 
+    t = Time(mjd, format="mjd", scale="utc", location=ATLAS_SITE)
     bjd_tdb = (t.tdb + t.light_travel_time(coord, kind="barycentric")).jd
 
     out = pd.DataFrame({
