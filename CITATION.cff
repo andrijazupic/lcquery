@@ -1,0 +1,9 @@
+cff-version: 1.0.0
+message: "If you use this software, please cite it via its DOI."
+title: "lcquery: Multi-survey light-curve query and standardization"
+authors:
+  - family-names: "Župić"
+    given-names: "Andrija"
+    orcid: "https://orcid.org/0009-0002-0811-2931"
+doi: 10.5281/zenodo.20767704   # concept DOI (all versions)
+url: "https://github.com/andrijazupic/lcquery"

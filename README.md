@@ -1,5 +1,7 @@
 # lcquery
 
+[![DOI](https://zenodo.org/badge/1266478575.svg)](https://doi.org/10.5281/zenodo.20767704)
+
 **Multi-survey time-domain light curves on a single, physically uniform schema.**
 
 Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries a dozen photometric archives, standardizes every light curve to **BJD_TDB** time and **micro-Jansky** flux, and writes one CSV per source per survey. The point is comparability: a ZTF point, a Gaia point, and an ASAS-SN point all land on the same time and flux axes, so you can overplot and model them together instead of wrangling each survey's native conventions one at a time.
@@ -188,3 +190,19 @@ Per survey you can set:
   afterward reads the cache.
 
 - **CHEOPS** is implemented but disabled by default (the DACE service is down and the code hasn't been tested) and is omitted from `band_reference.csv`.
+
+## Citation
+
+If you use `lcquery` in your research, please cite the Zenodo release:
+
+```bibtex
+@software{lcquery,
+  author    = {{\v Z}upi{\'c}, Andrija},
+  title     = {{lcquery: Multi-survey light-curve query and standardization}},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {v1.0.0},
+  doi       = {10.5281/zenodo.20767704},
+  url       = {[https://doi.org/10.5281/zenodo.20767704](https://doi.org/10.5281/zenodo.20767704)}
+}
+```
