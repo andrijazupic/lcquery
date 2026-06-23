@@ -22,6 +22,10 @@ BAND_OVERRIDE = {
     "ogle-i":   {"system": "Vega", "zp_Jy": 2416, "note": "Cousins I"},
     "ogle-v":   {"system": "Vega", "zp_Jy": 3636, "note": "Johnson V (≈AB)"},
 }
+# "system" = system of the OUTPUT uJy flux (which zero point was used), not the
+# survey's catalogue magnitude system. Gaia/K2/TESS convert from instrumental
+# e-/s, so their catalogue mag system does NOT enter: Gaia (catalogue VEGAMAG)
+# -> AB output via AB zero points; K2/TESS -> Vega in-band output via SVO Vega F0.
 
 _PREFIX = {"asassn":"ASAS-SN","atlas":"ATLAS","blackgem":"BlackGEM","crts":"CRTS",
            "gaia":"Gaia","jvar":"J-VAR","k2":"K2","tess":"TESS","nsc":"NSC",

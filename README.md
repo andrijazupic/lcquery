@@ -10,11 +10,13 @@ Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries 
 
 `lcquery` covers twelve surveys:
 
+The `System` column is the system of the **output µJy flux** — the zero point used to produce the flux density — not the magnitude system the survey's catalogue happens to publish. For most surveys these are the same. Gaia, K2, and TESS are the exceptions, explained below the table.
+
 | Survey | Filter labels | System | Photometry | Queried by |
 |---|---|---|---|---|
 | BlackGEM | `blackgem-u/g/q/r/i/z` | AB | forced (optimal) | Gaia DR3 ID |
-| TESS | `tess-spoc-20/120/200/600/1800` † | **Vega** | forced (PDCSAP) | position (cone) |
-| K2 | `k2-60/1800` † | **Vega** | forced (PDCSAP) | position (cone) |
+| TESS | `tess-spoc-20/120/200/600/1800` † | **Vega** § | forced (PDCSAP) | position (cone) |
+| K2 | `k2-60/1800` † | **Vega** § | forced (PDCSAP) | position (cone) |
 | ZTF | `ztf-g/r/i` | AB | detection (PSF, matchfile) | position (cone) |
 | CRTS | `crts-clear` (≈ Johnson V) | **Vega** | detection (aperture) | position (cone) |
 | NSC | `nsc-u/g/r/i/z/y/vr` | AB | detection (aperture) | position (cone) |
@@ -23,11 +25,13 @@ Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries 
 | J-VAR | `jvar-g/r/i` + `jvar-j0395/j0515/j0660/j0861` | AB | detection (aperture) | position (cone) |
 | ASAS-SN | `asassn-g/v` | **mixed** ‡ | forced (aperture) | position (cone) |
 | OGLE | `ogle-i/v` | **Vega** | detection (PSF/DIA) | position (cone) |
-| Gaia | `gaia-g/bp/rp` | AB | per-transit (to G≈21) | Gaia DR3 ID |
+| Gaia | `gaia-g/bp/rp` | AB § | per-transit (to G≈21) | Gaia DR3 ID |
 
 † TESS and K2 are each a single broad band; the trailing number is the sampling cadence in seconds — not the exposure, since the per-frame integration is ~2 s for TESS and ~6 s for K2 — so `tess-spoc-120` and `tess-spoc-1800` are the same passband sampled at 2 min vs 30 min.
 
 ‡ ASAS-SN is the one survey whose two bands sit on different systems: **`asassn-g` is AB, `asassn-v` is Vega** (a Johnson-V-like band, empirically ≈ +0.06 mag from AB). Its files therefore carry both systems — resolve per band via the `Filter` column and `band_reference.csv` (below), and its `query_metadata.csv` flux unit reads `uJy_mixed`.
+
+§ Gaia, K2, and TESS convert from **instrumental flux (e⁻/s)**, not from a published magnitude, so the catalogue's magnitude system never enters the calculation — only the zero point applied to the flux does. This produces two deliberate, easy-to-misread cases: **Gaia's catalogue magnitudes are VEGAMAG, but `lcquery` converts its flux with the AB zero points, so the output is AB** and directly comparable to the other optical AB surveys. **Kepler's catalogue `Kp` is a formally AB white-light magnitude, but `lcquery` converts K2/TESS flux with the SVO Kepler/TESS Vega zero-point flux, so the output is Vega.** The K2 and TESS bandpasses match no other survey, so their absolute scale is approximate and not cross-comparable regardless of the AB/Vega choice — fine for variability and periods, which a constant scale factor does not affect.
 
 ## How light curves are standardized
 
@@ -49,7 +53,7 @@ Absolute-timing floors worth knowing: **ASAS-SN's field-centre HJD is good only 
 
 ### Flux → µJy
 
-`Target_flux` and `Target_flux_err` are in **micro-Janskys**. For magnitude-based surveys the conversion is `flux = 10^((ZP − mag) / 2.5)`, with `ZP = 23.9` for AB (3631 Jy). Surveys that deliver flux natively are scaled directly: ATLAS and BlackGEM already report AB µJy; Gaia, TESS, and K2 convert from e⁻/s with a fixed per-band zero point.
+`Target_flux` and `Target_flux_err` are in **micro-Janskys**. For magnitude-based surveys the conversion is `flux = 10^((ZP − mag) / 2.5)`, with `ZP = 23.9` for AB (3631 Jy). Two groups skip the magnitude step entirely. ATLAS and BlackGEM already report AB µJy, taken directly. Gaia, K2, and TESS convert from instrumental flux (e⁻/s) using a fixed per-band zero point — so the system of the output (AB for Gaia, Vega for K2/TESS) is set by that zero point, not by the magnitude system in their catalogues. See the `§` note under the Surveys table. TESS and K2 fluxes are count rates scaled by a single global zero point — correct in shape (depths, amplitudes, periods) but not absolutely calibrated per source. Use them for variability, not absolute SEDs.
 
 Two photometric systems are in play:
 
@@ -57,6 +61,7 @@ Two photometric systems are in play:
 - **Vega** — CRTS, OGLE, TESS, K2, and ASAS-SN `v`, each with a band-specific zero point
   (Kepler 3241.90 Jy, TESS 2631.88 Jy, Cousins-I 2416 Jy, Johnson-V 3636 Jy, ASAS-SN V 3836.3 Jy; exact values in
   `band_reference.csv`).
+- Gaia appears under **AB** and K2/TESS under **Vega** by output system, which is the opposite of what their published catalogue magnitudes (Gaia VEGAMAG, Kepler AB) would suggest — see the `§` note above.
 
 **Negative and low-significance fluxes are kept on purpose.** The forced-photometry surveys (ATLAS, BlackGEM, TESS, K2, ASAS-SN) retain faint and slightly-negative measurements with their error bars rather than clipping at `flux > 0`, because discarding them would bias the noise floor that SNR-based period searches depend on. Expect negative points in faint light curves since they are valid measurements, not errors.
 

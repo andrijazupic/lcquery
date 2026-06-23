@@ -44,6 +44,16 @@ def fetch_tess_lc(source_id, ra, dec, radius_arcsec=2.0,
     factor it does not affect variability, and the TESS bandpass matches no other
     survey, so the absolute scale and the Vega/AB choice are immaterial for
     cross-survey period work. Errors (PDCSAP_FLUX_ERR, also e-/s) use the same factor.
+    IMPORTANT -- scope of this flux. This is the instrumental count rate scaled by a
+    single survey-wide zero point, i.e. an in-band flux density correct up to one
+    global multiplicative constant. It is NOT an absolutely-calibrated, per-source
+    physical flux: TESS's wide red bandpass and aperture losses make the true e-/s ->
+    Jy factor mildly source-dependent, so recovering absolute Janskys for a given star
+    requires anchoring that star to an external catalogue magnitude. lcquery does not
+    do this, by design -- the global scaling preserves every per-light-curve quantity
+    (eclipse depth, amplitude ratios, period), which is all that cross-survey period
+    and variability work needs. Do NOT place these values on an absolute SED or
+    combine them at the absolute level with other surveys' fluxes.
 
     Cleaning. Download with quality_bitmask="default", applying the standard TESS
     quality mask (attitude tweaks, safe mode, coarse pointing, Earth/Moon in the FOV,
