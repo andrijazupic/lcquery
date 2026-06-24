@@ -208,6 +208,6 @@ If you use `lcquery` in your research, please cite the Zenodo release:
   publisher = {Zenodo},
   version   = {v1.0.0},
   doi       = {10.5281/zenodo.20767704},
-  url       = {[https://doi.org/10.5281/zenodo.20767704](https://doi.org/10.5281/zenodo.20767704)}
+  url       = {https://doi.org/10.5281/zenodo.20767704}
 }
 ```
