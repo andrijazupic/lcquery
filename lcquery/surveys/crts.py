@@ -54,7 +54,11 @@ def _fetch_table(ra, dec, radius_arcmin, database, timeout, retries):
             if not m:
                 m = re.search(r'href=["\']?([^\s"\'<>]+\.csv)', text, re.I)
             if not m:
-                return None, "no_link"        
+                # results page that began rendering (flot/plot JS present) but
+                # carries no table or CSV link = server-side crash, not "no data"
+                if "jquery.flot" in text and "MasterID" not in text:
+                    return None, "server_error"
+                return None, "no_link"     
             csv_url = urljoin(r.url, m.group(1))
             rr = requests.get(csv_url, timeout=timeout)
             rr.raise_for_status()
@@ -125,6 +129,8 @@ def fetch_crts_lc(source_id, ra, dec, radius_arcsec=6.0,
 
     raw, reason = _fetch_table(ra, dec, radius_arcsec / 60.0, database, timeout, retries)
     if raw is None:
+        if reason == "server_error":
+            return result("search_failed")
         return result("no_data" if reason == "no_link" else "search_failed")
     raw = raw.rename(columns=lambda c: str(c).strip())
 
