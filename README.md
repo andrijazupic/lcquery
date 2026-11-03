@@ -198,7 +198,12 @@ Per survey you can set:
 
 ## Citation
 
-If you use `lcquery` in your research, please cite the Zenodo release:
+If you use `lcquery` in your research, please cite its
+[Zenodo record](https://doi.org/10.5281/zenodo.20767704).
+
+For reproducibility, we recommend citing the DOI
+corresponding to the specific software version used.
+Version-specific citations are available on Zenodo.
 
 ```bibtex
 @software{lcquery,
