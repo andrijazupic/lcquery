@@ -211,8 +211,8 @@ Version-specific citations are available on Zenodo.
   title     = {{lcquery: Multi-survey light-curve query and standardization}},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {v1.0.0},
   doi       = {10.5281/zenodo.20767704},
   url       = {https://doi.org/10.5281/zenodo.20767704}
 }
+
 ```
