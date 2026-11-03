@@ -17,8 +17,7 @@ CATALINA = EarthLocation.from_geodetic(
 V_F0_JY = 3636.0
 V_ZP_UJY = 2.5 * np.log10(V_F0_JY * 1e6)           
 
-_CGI = "http://nunuku.caltech.edu/cgi-bin/getcssconedb_release_img.cgi"
-
+_CGI = "http://nunuku.caltech.edu/cgi-bin/getcssconedb_release_imgN.cgi"
 
 def _fetch_table(ra, dec, radius_arcmin, database, timeout, retries):
     """Run the cone query and return the raw photometry DataFrame, or None.
@@ -48,6 +47,10 @@ def _fetch_table(ra, dec, radius_arcmin, database, timeout, retries):
             r = requests.post(_CGI, files=fields, timeout=timeout)
             r.raise_for_status()
             text = r.text
+            if any(msg in text for msg in ("not covered by CSS data",
+                                           "is beyond the survey limits",
+                                           "no objects were found in the specified area")):
+                return None, "no_link"      # outside footprint / dec limit / no source -> genuine no_data
             if text.lstrip().startswith("MasterID"):
                 return pd.read_csv(io.StringIO(text)), "ok"
             m = re.search(r'([^\s"\'<>]*result_web_file\w+\.csv)', text)

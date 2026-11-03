@@ -137,7 +137,7 @@ def fetch_gaia_lc(source_id, ra=None, dec=None, bands=None, valid_only=True, cle
     _ensure_login(auth)
     try:
         out = Gaia.load_data(ids=[sid], data_release="Gaia DR3", retrieval_type="EPOCH_PHOTOMETRY",
-                             valid_data=bool(valid_only), band=bands, data_structure="INDIVIDUAL",
+                             valid_data=bool(valid_only), band=bands, data_structure="DATAMODEL_STANDARD",
                              format="votable", verbose=False)
     except Exception as e:
         return result(f"error:{type(e).__name__}")
