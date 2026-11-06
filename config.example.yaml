@@ -20,6 +20,7 @@ surveys:
   BlackGEM:  {enabled: true,                     clean: true}                        
   TESS:      {enabled: true, radius_arcsec: 2.0             }
   K2:        {enabled: true, radius_arcsec: 2.0             }
+  Kepler:    {enabled: true, radius_arcsec: 2.0             } # prime mission Q0-Q17; Kepler field only
   ZTF:       {enabled: true, radius_arcsec: 1.5             }
   CRTS:      {enabled: true, radius_arcsec: 6.0, clean: true}
   NSC:       {enabled: true, radius_arcsec: 2.0, clean: true}

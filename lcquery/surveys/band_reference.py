@@ -11,8 +11,9 @@ SURVEY_REFERENCE = {
     "CRTS":      {"system": "Vega", "zp_Jy": 3636,    "phot": "detection (aperture)",       "timing": "topocentric UTC, start/mid unstated (<=15 s)","exposure": "30 s",                            "cadence": "~2 weeks (2-4 wk); 4 exp/visit over ~30 min", "bands": "clear (≈V)"},
     "OGLE":      {"system": "Vega", "zp_Jy": None,    "phot": "detection (PSF/DIA)",        "timing": "heliocentric UTC (HJD), start/mid unstated",  "exposure": "100 s I, 150 s V; 25 s disk",     "cadence": "19-60 min (bulge) to 1-3 d (disk/MC)",     "bands": "i,v"},
     "K2":        {"system": "Vega", "zp_Jy": 3241.9,  "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "6.02 s/frame",                    "cadence": "58.85 s (SC) / 1766 s (LC)",               "bands": "Kepler"},
+    "Kepler":    {"system": "Vega", "zp_Jy": 3241.9,  "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "6.02 s/frame",                    "cadence": "58.85 s (SC) / 1766 s (LC)",               "bands": "Kepler"},
     "TESS":      {"system": "Vega", "zp_Jy": 2631.88, "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "2 s/frame",                       "cadence": "20/120 s (TPF), 200/600/1800 s (FFI)",     "bands": "TESS"},
-    "ASAS-SN":   {"system": "per-band","zp_Jy": None, "phot": "forced (aperture)",          "timing": "heliocentric UTC (HJD), field-centre ~200 s", "exposure": "90 s (x3/epoch)",                 "cadence": "~nightly (g); ~2-3 d (V)",                 "bands": "g (AB), v (Vega)"},
+    "ASAS-SN":   {"system": "per-band","zp_Jy": None, "phot": "forced (aperture)",          "timing": "JD UTC (Sky Patrol v2), epoch start/mid undocumented", "exposure": "90 s (x3/epoch)",                 "cadence": "~nightly (g); ~2-3 d (V)",                 "bands": "g (AB), v (Vega)"},
    #"CHEOPS":    {"system": "UNAUDITED","zp_Jy": None,"phot": "forced (aperture)",          "timing": "?",                                           "exposure": "?",                               "cadence": "?",                                        "bands": "white"},
 }
 # Per-band overrides where bands differ from the survey default (only these need them).
@@ -23,12 +24,12 @@ BAND_OVERRIDE = {
     "ogle-v":   {"system": "Vega", "zp_Jy": 3636, "note": "Johnson V (≈AB)"},
 }
 # "system" = system of the OUTPUT uJy flux (which zero point was used), not the
-# survey's catalogue magnitude system. Gaia/K2/TESS convert from instrumental
+# survey's catalogue magnitude system. Gaia/K2/Kepler/TESS convert from instrumental
 # e-/s, so their catalogue mag system does NOT enter: Gaia (catalogue VEGAMAG)
-# -> AB output via AB zero points; K2/TESS -> Vega in-band output via SVO Vega F0.
+# -> AB output via AB zero points; K2/Kepler/TESS -> Vega in-band output via SVO Vega F0.
 
 _PREFIX = {"asassn":"ASAS-SN","atlas":"ATLAS","blackgem":"BlackGEM","crts":"CRTS",
-           "gaia":"Gaia","jvar":"J-VAR","k2":"K2","tess":"TESS","nsc":"NSC",
+           "gaia":"Gaia","jvar":"J-VAR","k2":"K2","kepler":"Kepler","tess":"TESS","nsc":"NSC",
            "ogle":"OGLE","skymapper":"SkyMapper","ztf":"ZTF","cheops":"CHEOPS"}
 
 def _survey_of(filter_label):

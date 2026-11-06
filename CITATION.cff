@@ -6,6 +6,6 @@ authors:
   - family-names: "Župić"
     given-names: "Andrija"
     orcid: "https://orcid.org/0009-0002-0811-2931"
-version: 1.0.1
+version: 1.1.0
 doi: 10.5281/zenodo.20767704
 url: "https://github.com/andrijazupic/lcquery"

@@ -56,8 +56,9 @@ def fetch_k2_lc(source_id, ra, dec, radius_arcsec=2.0,
     combine them at the absolute level with other surveys' fluxes.
 
     Cleaning. Download with quality_bitmask="default", applying the standard Kepler/K2
-    quality mask (excluding cadences flagged for attitude tweaks, safe mode, coarse
-    pointing, Argabrightening, cosmic-ray hits in the aperture, manual exclude, etc.).
+    quality mask (lightkurve 2.x: attitude tweak, safe mode, coarse point, Earth point,
+    desaturation event, manual exclude, detector anomaly, no data, thruster firing;
+    Argabrightening and cosmic-ray flags are NOT in the default mask).
     Then drop NaN in flux/flux_err and require flux_err > 0. flux > 0 is deliberately
     NOT imposed: negative PDCSAP fluxes are valid measurements for faint sources and
     are retained to keep the noise distribution unbiased. Multiple products for one
