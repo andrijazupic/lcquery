@@ -8,15 +8,16 @@ Given one source's Gaia DR3 `source_id` and ICRS coordinates, `lcquery` queries 
 
 ## Surveys
 
-`lcquery` covers twelve surveys:
+`lcquery` covers thirteen surveys:
 
-The `System` column is the system of the **output µJy flux** — the zero point used to produce the flux density — not the magnitude system the survey's catalogue happens to publish. For most surveys these are the same. Gaia, K2, and TESS are the exceptions, explained below the table.
+The `System` column is the system of the **output µJy flux** — the zero point used to produce the flux density — not the magnitude system the survey's catalogue happens to publish. For most surveys these are the same. Gaia, K2, Kepler, and TESS are the exceptions, explained below the table.
 
 | Survey | Filter labels | System | Photometry | Queried by |
 |---|---|---|---|---|
 | BlackGEM | `blackgem-u/g/q/r/i/z` | AB | forced (optimal) | Gaia DR3 ID |
 | TESS | `tess-spoc-20/120/200/600/1800` † | **Vega** § | forced (PDCSAP) | position (cone) |
 | K2 | `k2-60/1800` † | **Vega** § | forced (PDCSAP) | position (cone) |
+| Kepler | `kepler-60/1800` † | **Vega** § | forced (PDCSAP) | position (cone) |
 | ZTF | `ztf-g/r/i` | AB | detection (PSF, matchfile) | position (cone) |
 | CRTS | `crts-clear` (≈ Johnson V) | **Vega** | detection (aperture) | position (cone) |
 | NSC | `nsc-u/g/r/i/z/y/vr` | AB | detection (aperture) | position (cone) |
@@ -27,11 +28,11 @@ The `System` column is the system of the **output µJy flux** — the zero point
 | OGLE | `ogle-i/v` | **Vega** | detection (PSF/DIA) | position (cone) |
 | Gaia | `gaia-g/bp/rp` | AB § | per-transit (to G≈21) | Gaia DR3 ID |
 
-† TESS and K2 are each a single broad band; the trailing number is the sampling cadence in seconds — not the exposure, since the per-frame integration is ~2 s for TESS and ~6 s for K2 — so `tess-spoc-120` and `tess-spoc-1800` are the same passband sampled at 2 min vs 30 min.
+† TESS and Kepler/K2 are each a single broad band (Kepler and K2 share the same one); the trailing number is the sampling cadence in seconds — not the exposure, since the per-frame integration is ~2 s for TESS and ~6 s for Kepler/K2 — so `tess-spoc-120` and `tess-spoc-1800` are the same passband sampled at 2 min vs 30 min.
 
 ‡ ASAS-SN is the one survey whose two bands sit on different systems: **`asassn-g` is AB, `asassn-v` is Vega** (a Johnson-V-like band, empirically ≈ +0.06 mag from AB). Its files therefore carry both systems — resolve per band via the `Filter` column and `band_reference.csv` (below), and its `query_metadata.csv` flux unit reads `uJy_mixed`.
 
-§ Gaia, K2, and TESS convert from **instrumental flux (e⁻/s)**, not from a published magnitude, so the catalogue's magnitude system never enters the calculation — only the zero point applied to the flux does. This produces two deliberate, easy-to-misread cases: **Gaia's catalogue magnitudes are VEGAMAG, but `lcquery` converts its flux with the AB zero points, so the output is AB** and directly comparable to the other optical AB surveys. **Kepler's catalogue `Kp` is a formally AB white-light magnitude, but `lcquery` converts K2/TESS flux with the SVO Kepler/TESS Vega zero-point flux, so the output is Vega.** The K2 and TESS bandpasses match no other survey, so their absolute scale is approximate and not cross-comparable regardless of the AB/Vega choice — fine for variability and periods, which a constant scale factor does not affect.
+§ Gaia, Kepler, K2, and TESS convert from **instrumental flux (e⁻/s)**, not from a published magnitude, so the catalogue's magnitude system never enters the calculation — only the zero point applied to the flux does. This produces two deliberate, easy-to-misread cases: **Gaia's catalogue magnitudes are VEGAMAG, but `lcquery` converts its flux with the AB zero points, so the output is AB** and directly comparable to the other optical AB surveys. **Kepler's catalogue `Kp` is a formally AB white-light magnitude, but `lcquery` converts Kepler/K2/TESS flux with the SVO Kepler/TESS Vega zero-point flux, so the output is Vega.** The Kepler/K2 and TESS bandpasses match no other survey, so their absolute scale is approximate and not cross-comparable regardless of the AB/Vega choice — fine for variability and periods, which a constant scale factor does not affect.
 
 ## How light curves are standardized
 
@@ -39,31 +40,31 @@ The `System` column is the system of the **output µJy flux** — the zero point
 
 Every timestamp is converted to **Barycentric Julian Date on the TDB scale** (full JD), so epochs from different surveys are directly comparable. Surveys arrive in one of three native conventions, each handled differently:
 
-- **Topocentric (observer-frame) MJD in UTC** — ATLAS, BlackGEM, CRTS, J-VAR, NSC,
+- **Topocentric (observer-frame) MJD/JD in UTC** — ASAS-SN (Sky Patrol v2 `jd`), ATLAS, BlackGEM, CRTS, J-VAR, NSC,
   SkyMapper, ZTF. Converted UTC → TDB and given a barycentric light-travel correction
   computed at the source position.
-- **Heliocentric JD (HJD)** — ASAS-SN, OGLE. The heliocentric correction is first *undone*
+- **Heliocentric JD (HJD)** — OGLE. The heliocentric correction is first *undone*
   (recovering topocentric UTC), then redone to the barycentre. Because the HJD↔BJD difference drifts by up to a few seconds over years — the Sun's wobble around the barycentre, driven mainly by Jupiter's ~12-yr orbit, since Earth's annual motion cancels in the difference — this round trip, not a constant offset, is what yields a correct `BJD_TDB`.
-- **Already barycentric** — Gaia (TCB transit time), K2 (BKJD), TESS (BTJD). No light-travel
+- **Already barycentric** — Gaia (TCB transit time), Kepler and K2 (BKJD), TESS (BTJD). No light-travel
   correction is applied; only the time scale is put onto TDB (a ~20 s shift for Gaia's TCB).
 
 Where a survey reports the **exposure start** and the exposure length is known, the pipeline adds half the exposure to place the timestamp at **mid-exposure**, matching the rest of the pipeline (NSC, SkyMapper, ZTF; ATLAS and BlackGEM are already at mid-exposure natively, so no offset is added — ATLAS reports the exposure-midpoint MJD, and BlackGEM derives its midpoint from GPS shutter timing). NSC's exposure time is read per-row, since it varies across its constituent surveys.
 
-Absolute-timing floors worth knowing: **ASAS-SN's field-centre HJD is good only to ~200 s** unless recomputed with its aperture pipeline, and **CRTS / J-VAR carry a start-vs-mid ambiguity of order 10–60 s**. The per-survey timing convention is recorded in `band_reference.csv`.
+Absolute-timing floors worth knowing: **ASAS-SN epoch times are good to a few minutes** (Sky Patrol v2 does not document whether `jd` is the start or middle of the co-added epoch; lcquery ≤ 1.0.1 also wrongly treated it as HJD, which left ASAS-SN times without a barycentric correction — fixed in 1.1.0), and **CRTS / J-VAR carry a start-vs-mid ambiguity of order 10–60 s**. The per-survey timing convention is recorded in `band_reference.csv`.
 
 ### Flux → µJy
 
-`Target_flux` and `Target_flux_err` are in **micro-Janskys**. For magnitude-based surveys the conversion is `flux = 10^((ZP − mag) / 2.5)`, with `ZP = 23.9` for AB (3631 Jy). Two groups skip the magnitude step entirely. ATLAS and BlackGEM already report AB µJy, taken directly. Gaia, K2, and TESS convert from instrumental flux (e⁻/s) using a fixed per-band zero point — so the system of the output (AB for Gaia, Vega for K2/TESS) is set by that zero point, not by the magnitude system in their catalogues. See the `§` note under the Surveys table. TESS and K2 fluxes are count rates scaled by a single global zero point — correct in shape (depths, amplitudes, periods) but not absolutely calibrated per source. Use them for variability, not absolute SEDs.
+`Target_flux` and `Target_flux_err` are in **micro-Janskys**. For magnitude-based surveys the conversion is `flux = 10^((ZP − mag) / 2.5)`, with `ZP = 23.9` for AB (3631 Jy). Two groups skip the magnitude step entirely. ATLAS and BlackGEM already report AB µJy, taken directly. Gaia, Kepler, K2, and TESS convert from instrumental flux (e⁻/s) using a fixed per-band zero point — so the system of the output (AB for Gaia, Vega for Kepler/K2/TESS) is set by that zero point, not by the magnitude system in their catalogues. See the `§` note under the Surveys table. TESS, Kepler, and K2 fluxes are count rates scaled by a single global zero point — correct in shape (depths, amplitudes, periods) but not absolutely calibrated per source. Use them for variability, not absolute SEDs.
 
 Two photometric systems are in play:
 
 - **AB** — BlackGEM, Gaia, ZTF, NSC, ATLAS, SkyMapper, J-VAR, and ASAS-SN `g`.
-- **Vega** — CRTS, OGLE, TESS, K2, and ASAS-SN `v`, each with a band-specific zero point
-  (Kepler 3241.90 Jy, TESS 2631.88 Jy, Cousins-I 2416 Jy, Johnson-V 3636 Jy, ASAS-SN V 3836.3 Jy; exact values in
+- **Vega** — CRTS, OGLE, TESS, Kepler, K2, and ASAS-SN `v`, each with a band-specific zero point
+  (Kepler/K2 3241.90 Jy, TESS 2631.88 Jy, Cousins-I 2416 Jy, Johnson-V 3636 Jy, ASAS-SN V 3836.3 Jy; exact values in
   `band_reference.csv`).
-- Gaia appears under **AB** and K2/TESS under **Vega** by output system, which is the opposite of what their published catalogue magnitudes (Gaia VEGAMAG, Kepler AB) would suggest — see the `§` note above.
+- Gaia appears under **AB** and Kepler/K2/TESS under **Vega** by output system, which is the opposite of what their published catalogue magnitudes (Gaia VEGAMAG, Kepler AB) would suggest — see the `§` note above.
 
-**Negative and low-significance fluxes are kept on purpose.** The forced-photometry surveys (ATLAS, BlackGEM, TESS, K2, ASAS-SN) retain faint and slightly-negative measurements with their error bars rather than clipping at `flux > 0`, because discarding them would bias the noise floor that SNR-based period searches depend on. Expect negative points in faint light curves since they are valid measurements, not errors.
+**Negative and low-significance fluxes are kept on purpose.** The forced-photometry surveys (ATLAS, BlackGEM, TESS, Kepler, K2, ASAS-SN) retain faint and slightly-negative measurements with their error bars rather than clipping at `flux > 0`, because discarding them would bias the noise floor that SNR-based period searches depend on. Expect negative points in faint light curves since they are valid measurements, not errors.
 
 ## Data cleaning
 
@@ -75,7 +76,7 @@ Most surveys carry a `clean` switch (default `True`):
 - **`clean=False`** keeps more points but still removes the obvious garbage that would break
   downstream code: NaN times/fluxes, non-positive errors, and non-detection sentinels.
 
-A few surveys (TESS, K2, ZTF) apply their standard quality mask unconditionally and expose no `clean` toggle; their `clean` column in `query_metadata.csv` is therefore blank.
+A few surveys (TESS, Kepler, K2, ZTF) apply their standard quality mask unconditionally and expose no `clean` toggle; their `clean` column in `query_metadata.csv` is therefore blank.
 
 ## Installation
 
@@ -164,12 +165,12 @@ Copy `config.example.yaml` to `config.yaml` and edit it. Globally you can set:
 - `base_dir` — where CSVs + `query_metadata.csv` and `band_reference` go.
 - `overwrite` — re-download even if a cached CSV exists.
 - `write_header_comments` — prepend commented provenance to each CSV.
-- `clean`  — see **Data cleaning** above. *(TESS, K2, and ZTF clean unconditionally and ignore this.)*
+- `clean`  — see **Data cleaning** above. *(TESS, Kepler, K2, and ZTF clean unconditionally and ignore this.)*
 
 Per survey you can set:
 - `enabled` — turn a survey on or off (or restrict a single call with `survey_list=[...]`).
 - `radius_arcsec` — the cone-search radius. *(BlackGEM, Gaia, and ATLAS take no radius — see Notes.)*
-- `clean` — see **Data cleaning** above. *(TESS, K2, and ZTF clean unconditionally and ignore this.)*
+- `clean` — see **Data cleaning** above. *(TESS, Kepler, K2, and ZTF clean unconditionally and ignore this.)*
 
 ## Notes
 
@@ -186,7 +187,7 @@ Per survey you can set:
 - **"No data" is expected due to sky coverage.** Surveys have footprints and selection
   functions: southern surveys (SkyMapper, OGLE) won't have northern targets, CRTS excludes the
   Galactic plane, OGLE only contains catalogued variables, Gaia DR3 epoch photometry is
-  released for only a subset of sources, and K2 covers only its campaign fields. The `status`
+  released for only a subset of sources, K2 covers only its campaign fields, and Kepler only its single ~115 deg² prime-mission field (2009–2013; Kepler products with `DATA_REL` < 25 are rejected, status `old_data_release`, because early releases carried a ~1 min UTC/TDB timing error; a cone containing more than one KIC target returns `ambiguous_match` — call `fetch_kepler_lc(..., kic_id=...)` directly for a verified counterpart). The `status`
   column in `query_metadata.csv` records why each survey came back empty.
 
 - **The first OGLE query is slow.** OGLE has no positional API, so on first use `lcquery`

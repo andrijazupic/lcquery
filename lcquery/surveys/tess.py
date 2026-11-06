@@ -56,8 +56,12 @@ def fetch_tess_lc(source_id, ra, dec, radius_arcsec=2.0,
     combine them at the absolute level with other surveys' fluxes.
 
     Cleaning. Download with quality_bitmask="default", applying the standard TESS
-    quality mask (attitude tweaks, safe mode, coarse pointing, Earth/Moon in the FOV,
-    cosmic rays, stray light, manual exclude, etc.). Then drop NaN in flux/flux_err
+    quality mask (lightkurve 2.x: attitude tweak, safe mode, coarse point, Earth point,
+    Argabrightening, desaturation event, manual exclude, impulsive outlier, bad
+    calibration exclude; cosmic-ray and stray-light flags are NOT in the default mask).
+    Only SPOC and TESS-SPOC products are searched: stars that have only HLSP light
+    curves (QLP, TASOC, TEQUILA, ...) return no_data -- QLP fluxes are normalised, so
+    they cannot go through the e-/s zero-point conversion used here. Then drop NaN in flux/flux_err
     and require flux_err > 0; flux > 0 is deliberately NOT imposed, so valid negative
     PDCSAP fluxes on faint sources are retained to keep the noise distribution
     unbiased. Multiple sectors/products for one source are concatenated.

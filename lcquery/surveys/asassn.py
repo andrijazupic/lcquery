@@ -36,24 +36,31 @@ def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True):
     Photometry is FORCED aperture photometry (2-pixel radius) at the catalogue
     position, calibrated to ATLAS Refcat2 -- so the light curve is eclipse-complete.
 
-    Time -> BJD_TDB. ASAS-SN serves HJD on the UTC scale (the jd column holds the
-    heliocentric JD, computed at the FIELD CENTRE). The conversion treats the value
-    as HJD(UTC) at a representative southern site (CTIO), subtracts the heliocentric
-    light-travel time to recover geocentric/topocentric JD(UTC), converts the scale
-    UTC -> TDB, and adds the barycentric light-travel time:
+    Time -> BJD_TDB. Sky Patrol v2 (the pyasassn client used here) records, for each
+    epoch, "the Julian date" (Hart et al. 2023, Sky Patrol V2.0) -- NOT a heliocentric
+    date. The jd column is therefore treated as JD(UTC), observer frame: the scale is
+    converted UTC -> TDB and the barycentric light-travel time is added:
 
-        t0      = Time(hjd, format="jd", scale="utc", location=CTIO)
-        t_utc   = t0 - t0.light_travel_time(coord, kind="heliocentric")  # HJD -> JD(UTC)
+        t_utc   = Time(jd, format="jd", scale="utc", location=CTIO)
         BJD_TDB = (t_utc.tdb + t_utc.light_travel_time(coord, kind="barycentric")).jd
 
-    Although ASAS-SN is a multi-station network, a single site location is used: the
-    choice enters only the topocentric term (<= ~21 ms), and the heliocentric round
-    trip barely depends on the site. Both are swamped by ASAS-SN's own timing floor:
-    the field-centre HJD is accurate only to ~200 s unless the light curve is
-    recomputed with the Aperture Photometry pipeline (this limit is stated verbatim
-    in the ASAS-SN documentation). For periods of hours-days the ~200 s floor is a
-    fraction of a percent of a cycle; it matters only for very short periods or
-    precise eclipse timing.
+    Why not HJD: lcquery <= 1.0.1 assumed HJD and undid a heliocentric correction
+    before adding the barycentric one; since the input was not heliocentric, the two
+    cancelled and NO barycentric correction was applied (errors up to the full
+    light-travel delay, +-~500 s, annual). This was measured on three Kepler-field
+    RR Lyrae with a single-band fit of the light curve's own shape, timing offset
+    modelled as smooth polynomial + K * barycentric delay (K = 0 correct, -1 missing):
+    the HJD assumption gave K = -0.86 +- 0.25 (g) and -0.64 +- 0.27 (V); the JD
+    interpretation gives K = +0.14 and +0.36 (consistent with 0); ZTF, the control,
+    gave K = -0.01 +- 0.06 (r) and -0.14 +- 0.07 (g), and K = -1.01 / -1.14 with its
+    barycentric correction deliberately removed. A column named hjd/HJD (Sky Patrol
+    v1 style) is still handled as HJD(UTC) by the heliocentric round trip.
+    Not documented by Sky Patrol v2 and therefore not corrected: whether the epoch
+    time is the start or middle of the co-added epoch (usually three dithered 90 s
+    exposures), and the time scale (UTC assumed; TT would be a constant +69 s). Treat
+    ASAS-SN absolute timing as good to a few minutes. A single site (CTIO) is used for
+    the whole multi-station network; the site enters only the topocentric term
+    (<= ~21 ms).
 
     Flux -> uJy. The flux/flux_err columns are in mJy and are scaled x1000 to uJy.
     No light-travel or other transformation is applied to flux -- it is a direct unit
@@ -87,8 +94,8 @@ def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True):
     them -- a flux_err > 0 cut would NOT, since 99.99 > 0.)
 
     Data-quality caveats (not removed by clean): bright sources saturate (roughly
-    V <~ 10, g <~ 11) -- watch for bright outliers; and the ~200 s field-centre
-    timing floor noted above.
+    V <~ 10, g <~ 11) -- watch for bright outliers; and the few-minute absolute timing
+    floor noted above.
     """
     sid = int(source_id)
     def result(status, df=None):
@@ -156,9 +163,11 @@ def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True):
         band = np.array(["asassn"] * len(df))       
 
     coord = SkyCoord(float(ra) * u.deg, float(dec) * u.deg, frame="icrs")
-    hjd = df[tcol].to_numpy(float)
-    t0 = Time(hjd, format="jd", scale="utc", location=CTIO)
-    t_utc = t0 - t0.light_travel_time(coord, kind="heliocentric")
+    t_in = Time(df[tcol].to_numpy(float), format="jd", scale="utc", location=CTIO)
+    if tcol == "jd":                       # Sky Patrol v2: plain Julian date (UTC)
+        t_utc = t_in
+    else:                                  # explicit HJD column (Sky Patrol v1 style)
+        t_utc = t_in - t_in.light_travel_time(coord, kind="heliocentric")
     bjd_tdb = (t_utc.tdb + t_utc.light_travel_time(coord, kind="barycentric")).jd
 
     flux = df["flux"].to_numpy(float) * _MJY_TO_UJY

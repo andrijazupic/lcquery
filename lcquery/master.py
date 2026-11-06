@@ -8,7 +8,8 @@ from .surveys.band_reference import SURVEY_REFERENCE, write_band_reference
 
 _FETCHERS = {
     "BlackGEM": ("blackgem", "fetch_blackgem_lc"), "TESS": ("tess", "fetch_tess_lc"),
-    "K2": ("k2", "fetch_k2_lc"), "ZTF": ("ztf", "fetch_ztf_lc"),
+    "K2": ("k2", "fetch_k2_lc"), "Kepler": ("kepler", "fetch_kepler_lc"),
+    "ZTF": ("ztf", "fetch_ztf_lc"),
     "CRTS": ("crts", "fetch_crts_lc"), "NSC": ("nsc", "fetch_nsc_lc"),
     "ATLAS": ("atlas", "fetch_atlas_lc"), "SkyMapper": ("skymapper", "fetch_skymapper_lc"),
     "J-VAR": ("jvar", "fetch_jvar_lc"), "ASAS-SN": ("asassn", "fetch_asassn_lc"),
@@ -111,7 +112,7 @@ def get_all_lightcurves(source_id, ra, dec, config=None, survey_list=None,
             Native-uJy surveys (ATLAS, BlackGEM) are taken directly.
     - Vega surveys: flux[uJy] = 10^((ZP - mag)/2.5), with a band-specific Vega
             zero-point flux F0 (Johnson V 3636 Jy, Cousins I 2416 Jy, Kepler
-            3241.90 Jy, TESS.Red 2631.88 Jy, ASAS-SN V 3836.3 Jy).
+            3241.90 Jy (K2 & Kepler), TESS.Red 2631.88 Jy, ASAS-SN V 3836.3 Jy).
     A constant zero-point scale never affects variability or period detection; it
     matters only for absolute or cross-band photometry. Negative fluxes from
     forced photometry are KEPT -- clipping them biases the noise floor (Eddington
