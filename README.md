@@ -50,7 +50,7 @@ Every timestamp is converted to **Barycentric Julian Date on the TDB scale** (fu
 
 Where a survey reports the **exposure start** and the exposure length is known, the pipeline adds half the exposure to place the timestamp at **mid-exposure**, matching the rest of the pipeline (NSC, SkyMapper, ZTF; ATLAS and BlackGEM are already at mid-exposure natively, so no offset is added — ATLAS reports the exposure-midpoint MJD, and BlackGEM derives its midpoint from GPS shutter timing). NSC's exposure time is read per-row, since it varies across its constituent surveys.
 
-Absolute-timing floors worth knowing: **ASAS-SN epoch times are good to a few minutes** (Sky Patrol v2 does not document whether `jd` is the start or middle of the co-added epoch; lcquery ≤ 1.0.1 also wrongly treated it as HJD, which left ASAS-SN times without a barycentric correction — fixed in 1.1.0), and **CRTS / J-VAR carry a start-vs-mid ambiguity of order 10–60 s**. The per-survey timing convention is recorded in `band_reference.csv`.
+Absolute-timing floors worth knowing: **ASAS-SN epoch times are good to about ±1.5 min per epoch and ~15 s on average**: Sky Patrol v2 `jd` marks the epoch *start*, so lcquery ≥ 1.2.0 adds a measured 137 ± 13 s to reach mid-epoch (`epoch_offset_s=0` restores the raw stamps); lcquery ≤ 1.0.1 also wrongly treated `jd` as HJD, which left ASAS-SN times without a barycentric correction — fixed in 1.1.0, and **CRTS / J-VAR carry a start-vs-mid ambiguity of order 10–60 s**. The per-survey timing convention is recorded in `band_reference.csv`.
 
 ### Flux → µJy
 
@@ -195,7 +195,7 @@ Per survey you can set:
   `lcquery/surveys/ogle_ocvs_master.csv`. This one-time build takes a while; every query
   afterward reads the cache.
 
-- **CHEOPS** is implemented but disabled by default (the DACE service is down and the code hasn't been tested) and is omitted from `band_reference.csv`.
+- **CHEOPS** (pointed mission) reads the official DRP light curves of public DACE visits (`pip install dace-query`); public Guest-Observer visits that exist only in the ESA Mission Archive can be passed as local files (`fetch_cheops_lc(..., lightcurve_files=...)`). Times are converted TT → TDB; fluxes are count rates scaled by one constant per target onto the catalogue CHEOPS magnitude (`uJy_Vega_anchor`): variability, timing and visit-to-visit levels are exact, the absolute level is approximate. Disabled in `config.example.yaml` until you enable it.
 
 ## Citation
 

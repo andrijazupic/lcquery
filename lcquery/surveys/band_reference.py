@@ -13,8 +13,8 @@ SURVEY_REFERENCE = {
     "K2":        {"system": "Vega", "zp_Jy": 3241.9,  "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "6.02 s/frame",                    "cadence": "58.85 s (SC) / 1766 s (LC)",               "bands": "Kepler"},
     "Kepler":    {"system": "Vega", "zp_Jy": 3241.9,  "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "6.02 s/frame",                    "cadence": "58.85 s (SC) / 1766 s (LC)",               "bands": "Kepler"},
     "TESS":      {"system": "Vega", "zp_Jy": 2631.88, "phot": "forced (PDCSAP)",            "timing": "barycentric TDB, mid-cadence (native)",       "exposure": "2 s/frame",                       "cadence": "20/120 s (TPF), 200/600/1800 s (FFI)",     "bands": "TESS"},
-    "ASAS-SN":   {"system": "per-band","zp_Jy": None, "phot": "forced (aperture)",          "timing": "JD UTC (Sky Patrol v2), epoch start/mid undocumented", "exposure": "90 s (x3/epoch)",                 "cadence": "~nightly (g); ~2-3 d (V)",                 "bands": "g (AB), v (Vega)"},
-   #"CHEOPS":    {"system": "UNAUDITED","zp_Jy": None,"phot": "forced (aperture)",          "timing": "?",                                           "exposure": "?",                               "cadence": "?",                                        "bands": "white"},
+    "ASAS-SN":   {"system": "per-band","zp_Jy": None, "phot": "forced (aperture)",          "timing": "JD UTC (Sky Patrol v2) epoch start + 137 s -> mid-epoch", "exposure": "90 s (x3/epoch)",                 "cadence": "~nightly (g); ~2-3 d (V)",                 "bands": "g (AB), v (Vega)"},
+    "CHEOPS":    {"system": "Vega_anchor","zp_Jy": 3264.10,"phot": "forced (DRP aperture)",   "timing": "barycentric TT->TDB, mid-exposure (native)",  "exposure": "EXPTIME x NEXP stacked (TEXPTIME)",  "cadence": "pointed visits; ~99 min orbit gaps",      "bands": "CHEOPS white (rate anchored to MAG_CHPS, Vega)"},
 }
 # Per-band overrides where bands differ from the survey default (only these need them).
 BAND_OVERRIDE = {
@@ -27,6 +27,8 @@ BAND_OVERRIDE = {
 # survey's catalogue magnitude system. Gaia/K2/Kepler/TESS convert from instrumental
 # e-/s, so their catalogue mag system does NOT enter: Gaia (catalogue VEGAMAG)
 # -> AB output via AB zero points; K2/Kepler/TESS -> Vega in-band output via SVO Vega F0.
+# CHEOPS has no public electrons->Jy calibration: its count rates are scaled by ONE constant
+# per target onto the catalogue CHEOPS-band magnitude (SVO Vega F0) -> "Vega_anchor".
 
 _PREFIX = {"asassn":"ASAS-SN","atlas":"ATLAS","blackgem":"BlackGEM","crts":"CRTS",
            "gaia":"Gaia","jvar":"J-VAR","k2":"K2","kepler":"Kepler","tess":"TESS","nsc":"NSC",

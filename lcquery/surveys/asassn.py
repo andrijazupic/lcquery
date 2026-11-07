@@ -21,7 +21,10 @@ def _client():
     return _CLIENT
 
 
-def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True):
+ASASSN_EPOCH_OFFSET_S = 137.0     # Sky Patrol v2 jd -> epoch midpoint (empirical, +-13 s; see docstring)
+
+
+def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True, epoch_offset_s=ASASSN_EPOCH_OFFSET_S):
     """
     --------------------------------------------------------------------------------
     ASAS-SN  (All-Sky Automated Survey for Supernovae, Sky Patrol v2)
@@ -55,12 +58,23 @@ def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True):
     gave K = -0.01 +- 0.06 (r) and -0.14 +- 0.07 (g), and K = -1.01 / -1.14 with its
     barycentric correction deliberately removed. A column named hjd/HJD (Sky Patrol
     v1 style) is still handled as HJD(UTC) by the heliocentric round trip.
-    Not documented by Sky Patrol v2 and therefore not corrected: whether the epoch
-    time is the start or middle of the co-added epoch (usually three dithered 90 s
-    exposures), and the time scale (UTC assumed; TT would be a constant +69 s). Treat
-    ASAS-SN absolute timing as good to a few minutes. A single site (CTIO) is used for
-    the whole multi-station network; the site enters only the topocentric term
-    (<= ~21 ms).
+    Epoch midpoint (lcquery >= 1.2.0). A Sky Patrol v2 epoch co-adds up to three dithered
+    90 s exposures taken ~15 s apart (~300 s from first shutter-open to last close; on
+    average 2.7 images per epoch, Hart et al. 2023), and the jd column marks the START of
+    the epoch, not its middle. Measured with the lcquery cross-survey validation (five
+    variables -- a 70-min delta Scuti star and four RR Lyrae -- comparing ASAS-SN
+    with ZTF, J-VAR and Gaia observed in the same band and season): ASAS-SN times were
+    -137 +- 13 s early (delta Scuti star alone: -139 +- 9 s; Gaia, a space mission, agrees
+    with ZTF and J-VAR), consistent with the mean
+    mid-epoch offset of ~135 s for 2.7 images per epoch. epoch_offset_s (default 137.0 s)
+    is therefore ADDED to every Sky Patrol v2 time; set it to 0 to get the raw start-of-epoch
+    stamps. The number of images in an individual epoch is not served, so an epoch made of
+    one or two images is still off by up to ~+-90 s: treat single ASAS-SN epochs as good to
+    about +-1.5 min, and averages over many epochs as good to ~15 s. A column named hjd/HJD
+    (Sky Patrol v1 style) is not shifted. The time scale (UTC assumed) is not documented;
+    TT would be a constant +69 s, which this offset would partly absorb. A single site
+    (CTIO) is used for the whole multi-station network; the site enters only the
+    topocentric term (<= ~21 ms).
 
     Flux -> uJy. The flux/flux_err columns are in mJy and are scaled x1000 to uJy.
     No light-travel or other transformation is applied to flux -- it is a direct unit
@@ -169,6 +183,8 @@ def fetch_asassn_lc(source_id, ra, dec, radius_arcsec=5.0, clean=True):
     else:                                  # explicit HJD column (Sky Patrol v1 style)
         t_utc = t_in - t_in.light_travel_time(coord, kind="heliocentric")
     bjd_tdb = (t_utc.tdb + t_utc.light_travel_time(coord, kind="barycentric")).jd
+    if tcol == "jd" and epoch_offset_s:
+        bjd_tdb = bjd_tdb + float(epoch_offset_s) / 86400.0         # start of epoch -> mid-epoch
 
     flux = df["flux"].to_numpy(float) * _MJY_TO_UJY
     flux_err = df["flux_err"].to_numpy(float) * _MJY_TO_UJY

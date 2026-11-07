@@ -30,4 +30,4 @@ surveys:
   ASAS-SN:   {enabled: true, radius_arcsec: 5.0, clean: true}
   OGLE:      {enabled: true, radius_arcsec: 2.0, clean: true}
   Gaia:      {enabled: true,                     clean: true} 
-  CHEOPS:    {enabled: false, radius_arcsec: 15.0, clean: true} 
+  CHEOPS:    {enabled: false, radius_arcsec: 10.0, clean: true} # pointed mission; needs pip install dace-query
